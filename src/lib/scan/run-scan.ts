@@ -24,14 +24,10 @@ export interface RunScanResult {
 }
 
 function extractAsin(req: ScanRequest): string {
-  if (req.asin && req.asin.trim()) {
-    return req.asin.trim().toUpperCase();
-  }
+  if (req.asin && req.asin.trim()) return req.asin.trim().toUpperCase();
 
   if (req.productUrl) {
-    const match = req.productUrl.match(
-      /\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i
-    );
+    const match = req.productUrl.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i);
     if (match) return match[1].toUpperCase();
   }
 
@@ -52,7 +48,6 @@ export async function runScan({
   let pro: ScanResultPro | null = null;
 
   try {
-    // 🔥 DATA LAYER
     const amazon = isPro
       ? await fetchAmazonProduct(asin)
       : {
@@ -63,19 +58,13 @@ export async function runScan({
           reviews: Math.floor(Math.random() * 1000),
         };
 
-    // 💰 MARGIN ENGINE
-    const marginData = calculateMargin(
-      amazon.price,
-      request.cost ?? 0
-    );
+    const marginData = calculateMargin(amazon.price, request.cost ?? 0);
 
-    // 📊 COMPETITION ENGINE
     const competition = calculateCompetition(
       amazon.reviews ?? 0,
       amazon.rating ?? 0
     );
 
-    // 💣 VERDICT ENGINE
     let verdict: "BUY" | "SKIP" | "RISK";
 
     if (isPro) {
@@ -98,33 +87,26 @@ export async function runScan({
         : "Low margin or high competition"
       : "Upgrade to Pro for full analysis";
 
-    // 👉 BASE RESULT (TYPE SAFE FIXED)
     base = {
       asin: amazon.asin,
       title: amazon.title,
       price: amazon.price,
-
       rating: amazon.rating ?? 0,
       reviewCount: amazon.reviews ?? 0,
-
       category: "Amazon",
       isMock: !isPro,
       generatedAt: new Date().toISOString(),
 
-      // 반드시 base에 존재해야 하는 필드
       verdict,
       verdictReason,
 
-      // PRO METRICS (Base에도 허용된 optional 구조 기준)
       netMargin: isPro ? marginData.margin : undefined,
       roi: isPro ? marginData.roi : undefined,
       fees: isPro ? marginData.fees.totalFees : undefined,
-      competition: isPro
-        ? competition.level
-        : undefined,
+
+      competition: isPro ? competition.level : undefined,
     };
 
-    // PRO LAYER
     if (isPro) {
       pro = buildMockScanPro(asin, request.cost);
     }
@@ -134,14 +116,11 @@ export async function runScan({
     base = {
       asin: asin || "UNKNOWN",
       title: "Scan temporarily unavailable",
-
       verdict: "RISK",
       verdictReason: "System fallback activated",
-
       price: 0,
       rating: 0,
       reviewCount: 0,
-
       category: "Unknown",
       isMock: true,
       generatedAt: new Date().toISOString(),
@@ -150,7 +129,6 @@ export async function runScan({
     mock = true;
   }
 
-  // 🔥 ANALYTICS (non-blocking)
   void recordScan({
     userId,
     asin,
