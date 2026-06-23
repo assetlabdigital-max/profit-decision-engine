@@ -88,7 +88,11 @@ export function buildMockScanPro(asin: string, unitCost?: number): ScanResultPro
 
   return {
     ...base,
-    estimatedFees: { referralFee, fbaFee, totalFees },
+   estimatedFees: {
+  referralFee,
+  fbaFee,
+  totalFees,
+},
     profit: { unitCost: cost, netProfit, marginPercent, roiPercent },
     competition: {
       sellerCount,
