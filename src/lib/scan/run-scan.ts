@@ -40,8 +40,8 @@ export async function runScan({
   userId,
 }: RunScanParams): Promise<RunScanResult> {
   const asin = extractAsin(request);
-
   const isPro = tier === "pro";
+
   let mock = false;
 
   let base: ScanResultBase;
@@ -65,7 +65,7 @@ export async function runScan({
       amazon.rating ?? 0
     );
 
-    let verdict: "BUY" | "SKIP" | "RISK";
+    let verdict: "BUY" | "SKIP" | "RISK" = "SKIP";
 
     if (isPro) {
       if (marginData.margin > 0.25 && competition.level === "LOW") {
@@ -75,8 +75,6 @@ export async function runScan({
       } else {
         verdict = "RISK";
       }
-    } else {
-      verdict = "SKIP";
     }
 
     const verdictReason = isPro
@@ -134,9 +132,7 @@ export async function runScan({
     asin,
     tier,
     verdict: base.verdict,
-  }).catch((err) => {
-    console.error("[scan] recordScan failed (ignored):", err);
-  });
+  }).catch(() => {});
 
   return {
     result: isPro && pro ? pro : base,
