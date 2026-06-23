@@ -1,17 +1,8 @@
 /**
  * src/lib/scan/resolve-tier.ts
  *
- * NODE RUNTIME. Determines the caller's tier for the scan API.
- *
- * Priority:
- *   1. If logged in, try the DB for authoritative tier/subscription status.
- *   2. If DB is unavailable, fall back to the tier already embedded in
- *      the session JWT (set at login/refresh time) — slightly stale but
- *      never absent.
- *   3. If not logged in at all, tier is always "free".
- *
- * This function never throws — any failure resolves to "free", which is
- * the safe default (never accidentally grants Pro data on error).
+ * DEBUG VERSION
+ * Tier resolution logging enabled
  */
 
 import { auth } from "@/auth/auth";
@@ -28,16 +19,37 @@ export interface ResolvedTier {
 export async function resolveTier(): Promise<ResolvedTier> {
   try {
     const session = await auth();
+
+    console.log("================================");
+    console.log("[resolveTier] session =", session);
+    console.log("================================");
+
     const email = session?.user?.email ?? null;
 
+    console.log("[resolveTier] email =", email);
+
     if (!email) {
-      return { tier: "free", userId: null, email: null, usedFallback: false };
+      console.log("[resolveTier] anonymous user -> FREE");
+
+      return {
+        tier: "free",
+        userId: null,
+        email: null,
+        usedFallback: false,
+      };
     }
 
-    const sessionTier = ((session?.user as any)?.tier as Tier) ?? "free";
+    const sessionTier =
+      ((session?.user as any)?.tier as Tier) ?? "free";
+
+    console.log("[resolveTier] session tier =", sessionTier);
 
     try {
       const { user, mock } = await getUserByEmail(email);
+
+      console.log("[resolveTier] DB user =", user);
+      console.log("[resolveTier] DB tier =", user.tier);
+
       return {
         tier: user.tier,
         userId: user.id,
@@ -45,13 +57,29 @@ export async function resolveTier(): Promise<ResolvedTier> {
         usedFallback: mock,
       };
     } catch (dbErr) {
-      console.error("[resolveTier] DB lookup failed, using session JWT tier:", dbErr);
-      return { tier: sessionTier, userId: null, email, usedFallback: true };
+      console.error(
+        "[resolveTier] DB lookup failed, using JWT tier:",
+        dbErr
+      );
+
+      return {
+        tier: sessionTier,
+        userId: null,
+        email,
+        usedFallback: true,
+      };
     }
   } catch (err) {
-    // auth() itself failing (e.g. malformed cookie) must not break the
-    // scan endpoint — default to anonymous free tier.
-    console.error("[resolveTier] auth() failed, defaulting to anonymous free tier:", err);
-    return { tier: "free", userId: null, email: null, usedFallback: true };
+    console.error(
+      "[resolveTier] auth() failed, defaulting FREE:",
+      err
+    );
+
+    return {
+      tier: "free",
+      userId: null,
+      email: null,
+      usedFallback: true,
+    };
   }
 }
