@@ -1,42 +1,55 @@
-export type AmazonProduct = {
-  asin: string;
-  title: string;
-  price: number;
-  salesRank?: number;
-  rating?: number;
-  reviews?: number;
-};
+export async function fetchAmazonProduct(asin: string) {
+  const token = process.env.APIFY_API_KEY;
 
-export async function fetchAmazonProduct(asin: string): Promise<AmazonProduct> {
-  const KEEP_KEY = process.env.KEEPA_API_KEY;
+  if (!token) {
+    throw new Error("Missing APIFY_API_KEY");
+  }
 
-  // 👉 실제 API 연결 (Keepa 기준)
-  if (KEEP_KEY) {
-    const res = await fetch(
-      `https://api.keepa.com/product?key=${KEEP_KEY}&domain=1&asin=${asin}`
-    );
+  const url =
+    `https://api.apify.com/v2/acts/dtrungtin~amazon-scraper/run-sync-get-dataset-items` +
+    `?token=${token}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        asin,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Apify error: ${res.status}`);
+    }
 
     const data = await res.json();
-
-    const p = data?.products?.[0];
+    const item = data?.[0];
 
     return {
       asin,
-      title: p?.title || "Unknown Product",
-      price: p?.stats?.current?.[0] ? p.stats.current[0] / 100 : 0,
-      salesRank: p?.stats?.salesRank?.[0],
-      rating: p?.csv?.[16]?.slice(-1)[0],
-      reviews: p?.reviews || 0,
+      title: item?.title ?? "Unknown",
+      price: Number(item?.price ?? 0),
+      rating: Number(item?.rating ?? 0),
+      reviews: Number(item?.reviews ?? 0),
     };
-  }
+  } catch (err) {
+    console.error("[Apify] fetch failed:", err);
 
-  // 👉 fallback (절대 삭제 금지)
-  return {
-    asin,
-    title: `Mock Product ${asin}`,
-    price: Math.floor(Math.random() * 100) + 20,
-    salesRank: Math.floor(Math.random() * 50000),
-    rating: 4 + Math.random(),
-    reviews: Math.floor(Math.random() * 5000),
-  };
+    // graceful fallback (never crash production)
+    return {
+      asin,
+      title: "Fallback Product",
+      price: 0,
+      rating: 0,
+      reviews: 0,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
