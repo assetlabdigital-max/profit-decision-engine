@@ -1,9 +1,9 @@
 /**
  * src/types/index.ts
+ * Shared domain types
  */
 
 export type Tier = "free" | "pro";
-
 export type Verdict = "BUY" | "SKIP" | "RISK";
 
 export interface ScanRequest {
@@ -12,7 +12,7 @@ export interface ScanRequest {
   cost?: number;
 }
 
-/** Base result (ALL tiers) */
+/** BASE (clean only) */
 export interface ScanResultBase {
   asin: string;
   title: string;
@@ -34,8 +34,31 @@ export interface ScanResultBase {
   competition?: "low" | "medium" | "high";
 }
 
-/** Pro-only nested structure */
-export interface ScanResultPro extends ScanResultBase {
+/** PRO (DO NOT EXTEND BASE) */
+export interface ScanResultPro {
+  asin: string;
+  title: string;
+  verdict: Verdict;
+  verdictReason: string;
+
+  price: number;
+  rating: number;
+  reviewCount: number;
+
+  category: string;
+  isMock: boolean;
+  generatedAt: string;
+
+  netMargin?: number;
+  roi?: number;
+  fees?: number;
+
+  competition: {
+    sellerCount: number;
+    buyBoxPrice: number;
+    competitionLevel: "low" | "medium" | "high";
+  };
+
   estimatedFees: {
     referralFee: number;
     fbaFee: number;
@@ -48,16 +71,11 @@ export interface ScanResultPro extends ScanResultBase {
     marginPercent: number;
     roiPercent: number;
   };
-
-  competition: {
-    sellerCount: number;
-    buyBoxPrice: number;
-    competitionLevel: "low" | "medium" | "high";
-  };
 }
 
 export type ScanResult = ScanResultBase | ScanResultPro;
 
+/** API */
 export interface ApiErrorShape {
   ok: false;
   error: string;
@@ -73,6 +91,7 @@ export interface ApiOkShape<T> {
 
 export type ApiResponse<T> = ApiOkShape<T> | ApiErrorShape;
 
+/** DB */
 export interface DbUser {
   id: string;
   email: string;
@@ -83,6 +102,7 @@ export interface DbUser {
   createdAt: string;
 }
 
+/** health */
 export interface ServiceHealth {
   db: "live" | "mock" | "error";
   stripe: "live" | "mock" | "error";
@@ -90,7 +110,7 @@ export interface ServiceHealth {
   apify: "live" | "mock" | "error";
 }
 
-// TikTok
+/** tiktok */
 export interface TrendingHashtag {
   hashtag: string;
   rank: number | null;
