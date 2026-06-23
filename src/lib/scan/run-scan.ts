@@ -3,6 +3,7 @@ import type {
   ScanResultBase,
   ScanResultPro,
   Tier,
+  Verdict,
 } from "@/types";
 
 import { buildMockScanPro } from "@/lib/mock/mock-data";
@@ -24,7 +25,7 @@ export interface RunScanResult {
 }
 
 function extractAsin(req: ScanRequest): string {
-  if (req.asin && req.asin.trim()) return req.asin.trim().toUpperCase();
+  if (req.asin?.trim()) return req.asin.trim().toUpperCase();
 
   if (req.productUrl) {
     const match = req.productUrl.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i);
@@ -32,6 +33,11 @@ function extractAsin(req: ScanRequest): string {
   }
 
   return "UNKNOWN";
+}
+
+function normalizeCompetition(level: string): "low" | "medium" | "high" {
+  if (level === "low" || level === "medium" || level === "high") return level;
+  return "low";
 }
 
 export async function runScan({
@@ -65,10 +71,10 @@ export async function runScan({
       amazon.rating ?? 0
     );
 
-    let verdict: "BUY" | "SKIP" | "RISK" = "SKIP";
+    let verdict: Verdict = "SKIP";
 
     if (isPro) {
-      if (marginData.margin > 0.25 && competition.level === "LOW") {
+      if (marginData.margin > 0.25 && competition.level === "low") {
         verdict = "BUY";
       } else if (marginData.margin > 0.1) {
         verdict = "SKIP";
@@ -82,15 +88,17 @@ export async function runScan({
         ? "High margin + low competition"
         : verdict === "SKIP"
         ? "Moderate opportunity"
-        : "Low margin or high competition"
+        : "Low margin or high risk"
       : "Upgrade to Pro for full analysis";
 
     base = {
       asin: amazon.asin,
       title: amazon.title,
       price: amazon.price,
+
       rating: amazon.rating ?? 0,
       reviewCount: amazon.reviews ?? 0,
+
       category: "Amazon",
       isMock: !isPro,
       generatedAt: new Date().toISOString(),
@@ -102,19 +110,17 @@ export async function runScan({
       roi: isPro ? marginData.roi : undefined,
       fees: isPro ? marginData.fees.totalFees : undefined,
 
-      competition: isPro
-  ? (competition.level as ScanResultBase["competition"])
-  : undefined,
+      competition: isPro ? normalizeCompetition(competition.level) : undefined,
     };
 
     if (isPro) {
       pro = buildMockScanPro(asin, request.cost);
     }
   } catch (err) {
-    console.error("[scan] system error fallback:", err);
+    console.error("[scan] fallback:", err);
 
     base = {
-      asin: asin || "UNKNOWN",
+      asin,
       title: "Scan temporarily unavailable",
       verdict: "RISK",
       verdictReason: "System fallback activated",
