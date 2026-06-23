@@ -102,9 +102,8 @@ export async function runScan({
       roi: isPro ? marginData.roi : undefined,
       fees: isPro ? marginData.fees.totalFees : undefined,
 
-      competition: isPro
-  ? competition.level as "low" | "medium" | "high"
-  : undefined,
+      // ✅ FIX: remove cast + keep strict union safe
+      competition: isPro ? competition.level : undefined,
     };
 
     if (isPro) {
