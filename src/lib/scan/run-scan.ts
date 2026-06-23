@@ -24,7 +24,7 @@ export interface RunScanResult {
 }
 
 function extractAsin(req: ScanRequest): string {
-  if (req.asin && req.asin.trim()) return req.asin.trim().toUpperCase();
+  if (req.asin?.trim()) return req.asin.trim().toUpperCase();
 
   if (req.productUrl) {
     const match = req.productUrl.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i);
@@ -68,7 +68,7 @@ export async function runScan({
     let verdict: "BUY" | "SKIP" | "RISK" = "SKIP";
 
     if (isPro) {
-      if (marginData.margin > 0.25 && competition.level === "LOW") {
+      if (marginData.margin > 0.25 && competition.level === "low") {
         verdict = "BUY";
       } else if (marginData.margin > 0.1) {
         verdict = "SKIP";
@@ -89,8 +89,10 @@ export async function runScan({
       asin: amazon.asin,
       title: amazon.title,
       price: amazon.price,
+
       rating: amazon.rating ?? 0,
       reviewCount: amazon.reviews ?? 0,
+
       category: "Amazon",
       isMock: !isPro,
       generatedAt: new Date().toISOString(),
@@ -102,8 +104,9 @@ export async function runScan({
       roi: isPro ? marginData.roi : undefined,
       fees: isPro ? marginData.fees.totalFees : undefined,
 
-      // ✅ FIX: remove cast + keep strict union safe
-      competition: isPro ? competition.level : undefined,
+      competition: isPro
+        ? competition.level
+        : undefined,
     };
 
     if (isPro) {
@@ -115,11 +118,14 @@ export async function runScan({
     base = {
       asin: asin || "UNKNOWN",
       title: "Scan temporarily unavailable",
+
       verdict: "RISK",
       verdictReason: "System fallback activated",
+
       price: 0,
       rating: 0,
       reviewCount: 0,
+
       category: "Unknown",
       isMock: true,
       generatedAt: new Date().toISOString(),
