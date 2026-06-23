@@ -103,7 +103,7 @@ export async function runScan({
       fees: isPro ? marginData.fees.totalFees : undefined,
 
       competition: isPro
-  ? (competition.level.toLowerCase() as "low" | "medium" | "high")
+  ? (competition.level as ScanResultBase["competition"])
   : undefined,
     };
 
