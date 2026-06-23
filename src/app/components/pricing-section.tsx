@@ -1,6 +1,11 @@
-import { Eyebrow } from "@/app/components/demo";
+import { Eyebrow } from "@/app/components/ui";
 
-const FREE_FEATURES = ["Unlimited verdicts (BUY/SKIP/RISK)", "Price, rating & review count", "Category & listing snapshot"];
+const FREE_FEATURES = [
+  "Unlimited verdicts (BUY/SKIP/RISK)",
+  "Price, rating & review count",
+  "Category & listing snapshot",
+];
+
 const PRO_FEATURES = [
   "Everything in Free",
   "Full margin, fee & ROI breakdown",
@@ -15,20 +20,34 @@ export default function PricingSection() {
       <div className="wrap">
         <div style={{ maxWidth: 560, marginBottom: 48 }}>
           <Eyebrow>Pricing</Eyebrow>
+
           <h2
             className="font-display"
-            style={{ fontSize: "clamp(28px, 3.4vw, 38px)", fontWeight: 700, margin: "12px 0 14px", letterSpacing: "-0.01em" }}
+            style={{
+              fontSize: "clamp(28px, 3.4vw, 38px)",
+              fontWeight: 700,
+              margin: "12px 0 14px",
+              letterSpacing: "-0.01em",
+            }}
           >
             Free covers the verdict. Pro covers the why.
           </h2>
+
           <p style={{ color: "var(--paper-dim)", fontSize: 16, margin: 0 }}>
             Most people start free, run a few dozen scans, and upgrade once they're ready to act on
             the margin math behind each call.
           </p>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }} className="pricing-grid">
-          {/* Free */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 24,
+          }}
+          className="pricing-grid"
+        >
+          {/* FREE */}
           <div
             style={{
               border: "1px solid var(--ink-line)",
@@ -41,6 +60,7 @@ export default function PricingSection() {
             <div className="font-mono" style={{ fontSize: 13, color: "var(--paper-faint)", marginBottom: 8 }}>
               FREE
             </div>
+
             <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 20 }}>
               <span className="font-display" style={{ fontSize: 40, fontWeight: 700 }}>
                 $0
@@ -48,7 +68,16 @@ export default function PricingSection() {
               <span style={{ color: "var(--paper-dim)", fontSize: 14 }}>/ forever</span>
             </div>
 
-            <ul style={{ listStyle: "none", padding: 0, margin: "0 0 28px", display: "flex", flexDirection: "column", gap: 12 }}>
+            <ul
+              style={{
+                listStyle: "none",
+                padding: 0,
+                margin: "0 0 28px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
               {FREE_FEATURES.map((f) => (
                 <FeatureRow key={f} text={f} />
               ))}
@@ -72,7 +101,7 @@ export default function PricingSection() {
             </a>
           </div>
 
-          {/* Pro */}
+          {/* PRO */}
           <div
             style={{
               border: "1px solid var(--accent)",
@@ -106,14 +135,26 @@ export default function PricingSection() {
             <div className="font-mono" style={{ fontSize: 13, color: "var(--accent-bright)", marginBottom: 8 }}>
               PRO
             </div>
+
             <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 20 }}>
               <span className="font-display" style={{ fontSize: 40, fontWeight: 700 }}>
                 $29
               </span>
-              <span style={{ color: "var(--paper-dim)", fontSize: 14 }}>/ month, billed monthly or yearly</span>
+              <span style={{ color: "var(--paper-dim)", fontSize: 14 }}>
+                / month, billed monthly or yearly
+              </span>
             </div>
 
-            <ul style={{ listStyle: "none", padding: 0, margin: "0 0 28px", display: "flex", flexDirection: "column", gap: 12 }}>
+            <ul
+              style={{
+                listStyle: "none",
+                padding: 0,
+                margin: "0 0 28px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
               {PRO_FEATURES.map((f) => (
                 <FeatureRow key={f} text={f} highlight />
               ))}
@@ -151,10 +192,13 @@ function FeatureRow({ text, highlight }: { text: string; highlight?: boolean }) 
           flexShrink: 0,
           marginTop: 1,
         }}
-        aria-hidden
       >
         ✓
       </span>
+      <span style={{ color: "var(--paper-dim)" }}>{text}</span>
+    </li>
+  );
+}
       <span style={{ color: "var(--paper-dim)" }}>{text}</span>
     </li>
   );
