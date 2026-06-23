@@ -1,13 +1,36 @@
-export async function fetchAmazonProduct(asin: string) {
+/**
+ * Apify Amazon Scraper - Production Stable Client
+ * ------------------------------------------------
+ * - timeout safety
+ * - API key validation
+ * - full debug trace (dev-safe)
+ * - multi-shape response normalization
+ * - guaranteed fallback (NEVER throws in production flow)
+ */
+
+export interface AmazonProduct {
+  asin: string;
+  title: string;
+  price: number;
+  rating: number;
+  reviews: number;
+}
+
+export async function fetchAmazonProduct(
+  asin: string
+): Promise<AmazonProduct> {
   const token = process.env.APIFY_API_KEY;
 
   console.log("====================================");
+  console.log("[APIFY DEBUG] START fetchAmazonProduct");
   console.log("[APIFY DEBUG] token exists =", !!token);
   console.log("[APIFY DEBUG] asin =", asin);
   console.log("====================================");
 
+  // 🔴 HARD GUARD (never proceed without API key)
   if (!token) {
-    throw new Error("Missing APIFY_API_KEY");
+    console.error("[APIFY DEBUG] Missing APIFY_API_KEY");
+    return fallback(asin);
   }
 
   const url =
@@ -15,13 +38,14 @@ export async function fetchAmazonProduct(asin: string) {
     `?token=${token}`;
 
   const controller = new AbortController();
+
   const timeout = setTimeout(() => {
-    console.warn("[APIFY DEBUG] timeout triggered (15s)");
+    console.warn("[APIFY DEBUG] TIMEOUT triggered (15s)");
     controller.abort();
   }, 15000);
 
   try {
-    console.log("[APIFY DEBUG] calling Apify...");
+    console.log("[APIFY DEBUG] calling Apify API...");
 
     const res = await fetch(url, {
       method: "POST",
@@ -29,68 +53,78 @@ export async function fetchAmazonProduct(asin: string) {
         "Content-Type": "application/json",
       },
       signal: controller.signal,
-      body: JSON.stringify({
-        asin,
-      }),
+      body: JSON.stringify({ asin }),
     });
 
     console.log("[APIFY DEBUG] status =", res.status);
 
     if (!res.ok) {
       const text = await res.text();
-      console.error("[APIFY DEBUG] response error body =", text);
-      throw new Error(`Apify error: ${res.status}`);
+      console.error("[APIFY DEBUG] ERROR RESPONSE =", text);
+      return fallback(asin);
     }
 
     const data = await res.json();
 
-    // 🔥 FULL RESPONSE TRACE (production debug 핵심)
     console.log(
       "[APIFY DEBUG] FULL RESPONSE =",
       JSON.stringify(data, null, 2)
     );
 
-    console.log(
-      "[APIFY DEBUG] raw type =",
-      Array.isArray(data) ? "array" : typeof data
-    );
-
-    // ✅ SAFE DATA NORMALIZATION (핵심 FIX)
-    const item =
-      Array.isArray(data)
-        ? data[0]
-        : Array.isArray(data?.items)
-        ? data.items[0]
-        : Array.isArray(data?.results)
-        ? data.results[0]
-        : data?.[0] ?? null;
+    const item = normalize(data);
 
     console.log("[APIFY DEBUG] normalized item =", item);
 
-    const result = {
+    const result: AmazonProduct = {
       asin,
       title: item?.title ?? "Unknown",
-      price: Number(item?.price ?? 0),
-      rating: Number(item?.rating ?? 0),
-      reviews: Number(item?.reviews ?? 0),
+      price: toNumber(item?.price),
+      rating: toNumber(item?.rating),
+      reviews: toNumber(item?.reviews),
     };
 
-    console.log("[APIFY DEBUG] final result =", result);
+    console.log("[APIFY DEBUG] FINAL RESULT =", result);
 
     return result;
   } catch (err) {
-    console.error("[APIFY DEBUG] fetch failed:", err);
-
-    // graceful fallback (NEVER break production)
-    return {
-      asin,
-      title: "Fallback Product",
-      price: 0,
-      rating: 0,
-      reviews: 0,
-    };
+    console.error("[APIFY DEBUG] FETCH FAILED:", err);
+    return fallback(asin);
   } finally {
     clearTimeout(timeout);
     console.log("[APIFY DEBUG] request finished");
   }
+}
+
+/**
+ * Normalize multiple Apify response shapes
+ */
+function normalize(data: any) {
+  if (Array.isArray(data)) return data[0];
+  if (Array.isArray(data?.items)) return data.items[0];
+  if (Array.isArray(data?.results)) return data.results[0];
+  if (Array.isArray(data?.data)) return data.data[0];
+  return data?.[0] ?? null;
+}
+
+/**
+ * Safe number conversion
+ */
+function toNumber(value: any): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * NEVER-FAIL fallback (production safety rule)
+ */
+function fallback(asin: string): AmazonProduct {
+  console.warn("[APIFY DEBUG] USING FALLBACK for asin =", asin);
+
+  return {
+    asin,
+    title: "Fallback Product",
+    price: 0,
+    rating: 0,
+    reviews: 0,
+  };
 }
