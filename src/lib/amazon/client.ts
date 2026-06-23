@@ -1,3 +1,15 @@
+/**
+ * STEP 6-C — PRODUCTION SAFE APIFY AMAZON CLIENT (FINAL STABLE VERSION)
+ *
+ * FEATURES:
+ * - 15s timeout protection (AbortController)
+ * - FULL DEBUG TRACE (production-safe logging)
+ * - Multi-shape Apify dataset normalization
+ * - Defensive parsing for ALL known Apify formats
+ * - Safe env validation (never silent fail)
+ * - Guaranteed fallback (NEVER break production)
+ */
+
 export async function fetchAmazonProduct(asin: string) {
   const token = process.env.APIFY_API_KEY;
 
@@ -44,7 +56,7 @@ export async function fetchAmazonProduct(asin: string) {
 
     const data = await res.json();
 
-    // 🔥 FULL RESPONSE TRACE (production debug 핵심)
+    // 🔥 FULL RAW RESPONSE TRACE (CRITICAL DEBUG)
     console.log(
       "[APIFY DEBUG] FULL RESPONSE =",
       JSON.stringify(data, null, 2)
@@ -55,7 +67,7 @@ export async function fetchAmazonProduct(asin: string) {
       Array.isArray(data) ? "array" : typeof data
     );
 
-    // ✅ SAFE NORMALIZATION (Apify 구조 전체 대응)
+    // ✅ SAFE MULTI-SHAPE NORMALIZATION (Apify real-world 대응)
     const item =
       Array.isArray(data)
         ? data[0]
@@ -83,7 +95,7 @@ export async function fetchAmazonProduct(asin: string) {
   } catch (err) {
     console.error("[APIFY DEBUG] fetch failed:", err);
 
-    // 🚨 NEVER BREAK PRODUCTION
+    // 🚨 GUARANTEED PRODUCTION FALLBACK
     return {
       asin,
       title: "Fallback Product",
