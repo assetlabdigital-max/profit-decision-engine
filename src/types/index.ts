@@ -26,6 +26,10 @@ export interface ScanResultBase {
   category: string;
   isMock: boolean;
   generatedAt: string;
+    netMargin?: number;
+  roi?: number;
+  fees?: number;
+  competition?: string;
 }
 
 /** Extra fields Pro tier receives on top of the base fields. */
