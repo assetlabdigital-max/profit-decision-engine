@@ -1,21 +1,18 @@
-/**
- * src/types/index.ts
- * Shared domain types
- */
-
 export type Tier = "free" | "pro";
 export type Verdict = "BUY" | "SKIP" | "RISK";
 
+/** REQUEST */
 export interface ScanRequest {
   asin?: string;
   productUrl?: string;
   cost?: number;
 }
 
-/** BASE (clean only) */
+/** BASE RESULT */
 export interface ScanResultBase {
   asin: string;
   title: string;
+
   verdict: Verdict;
   verdictReason: string;
 
@@ -34,10 +31,11 @@ export interface ScanResultBase {
   competition?: "low" | "medium" | "high";
 }
 
-/** PRO (DO NOT EXTEND BASE) */
+/** PRO RESULT (NOT EXTENDING BASE) */
 export interface ScanResultPro {
   asin: string;
   title: string;
+
   verdict: Verdict;
   verdictReason: string;
 
@@ -73,6 +71,7 @@ export interface ScanResultPro {
   };
 }
 
+/** UNION */
 export type ScanResult = ScanResultBase | ScanResultPro;
 
 /** API */
@@ -96,13 +95,15 @@ export interface DbUser {
   id: string;
   email: string;
   tier: Tier;
+
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
   stripeSubscriptionStatus: string | null;
+
   createdAt: string;
 }
 
-/** health */
+/** HEALTH */
 export interface ServiceHealth {
   db: "live" | "mock" | "error";
   stripe: "live" | "mock" | "error";
@@ -110,7 +111,7 @@ export interface ServiceHealth {
   apify: "live" | "mock" | "error";
 }
 
-/** tiktok */
+/** TIKTOK */
 export interface TrendingHashtag {
   hashtag: string;
   rank: number | null;
