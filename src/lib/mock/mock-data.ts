@@ -21,12 +21,12 @@ function hashString(s: string): string {
   return Math.abs(h).toString(36);
 }
 
-/** deterministic pseudo-random */
 function seededRandom(seed: string): () => number {
   let s = 0;
   for (let i = 0; i < seed.length; i++) {
     s = (s * 31 + seed.charCodeAt(i)) >>> 0;
   }
+
   return () => {
     s = (s * 1664525 + 1013904223) >>> 0;
     return s / 4294967296;
@@ -42,8 +42,7 @@ const MOCK_CATEGORIES = [
 ];
 
 export function buildMockScanBase(asin: string): ScanResultBase {
-  const rand = seededRandom(asin || "DEFAULT_ASIN");
-
+  const rand = seededRandom(asin || "DEFAULT");
   const price = Math.round((10 + rand() * 60) * 100) / 100;
   const rating = Math.round((3 + rand() * 2) * 10) / 10;
   const reviewCount = Math.floor(50 + rand() * 5000);
@@ -51,16 +50,15 @@ export function buildMockScanBase(asin: string): ScanResultBase {
   const verdicts: ScanResultBase["verdict"][] = ["BUY", "SKIP", "RISK"];
   const verdict = verdicts[Math.floor(rand() * verdicts.length)];
 
-  const reasonMap: Record<ScanResultBase["verdict"], string> = {
-    BUY: "Strong demand signal and healthy margin headroom in mock model.",
-    SKIP: "Margin too thin or saturation too high in mock model.",
-    RISK: "Volatile rating/review trend in mock model — needs manual review.",
+  const reasonMap: Record<string, string> = {
+    BUY: "Strong demand signal in mock model.",
+    SKIP: "Moderate opportunity in mock model.",
+    RISK: "High volatility in mock model.",
   };
 
   return {
-    asin: asin || "MOCKASIN001",
-    title: `Mock Product ${asin || "Sample"} — Demo Listing`,
-
+    asin: asin || "MOCKASIN",
+    title: `Mock Product ${asin || "Sample"}`,
     verdict,
     verdictReason: reasonMap[verdict],
 
@@ -81,21 +79,18 @@ export function buildMockScanPro(
   const base = buildMockScanBase(asin);
   const rand = seededRandom(asin + "-pro");
 
-  const cost = unitCost ?? Math.round(base.price * 0.35 * 100) / 100;
+  const cost = unitCost ?? base.price * 0.35;
+  const referralFee = base.price * 0.15;
+  const fbaFee = 3 + rand() * 4;
+  const totalFees = referralFee + fbaFee;
 
-  const referralFee = Math.round(base.price * 0.15 * 100) / 100;
-  const fbaFee = Math.round((3 + rand() * 4) * 100) / 100;
-  const totalFees = Math.round((referralFee + fbaFee) * 100) / 100;
-
-  const netProfit = Math.round((base.price - cost - totalFees) * 100) / 100;
-  const marginPercent =
-    base.price > 0 ? Math.round((netProfit / base.price) * 1000) / 10 : 0;
-  const roiPercent =
-    cost > 0 ? Math.round((netProfit / cost) * 1000) / 10 : 0;
+  const netProfit = base.price - cost - totalFees;
+  const marginPercent = (netProfit / base.price) * 100;
+  const roiPercent = (netProfit / cost) * 100;
 
   const sellerCount = Math.floor(1 + rand() * 25);
 
-  const competitionLevel: ScanResultPro["competition"]["competitionLevel"] =
+  const competitionLevel: "low" | "medium" | "high" =
     sellerCount > 15 ? "high" : sellerCount > 5 ? "medium" : "low";
 
   return {
@@ -116,13 +111,13 @@ export function buildMockScanPro(
 
     competition: {
       sellerCount,
-      buyBoxPrice: Math.round(base.price * (0.95 + rand() * 0.1) * 100) / 100,
+      buyBoxPrice: base.price * (0.95 + rand() * 0.1),
       competitionLevel,
     },
   };
 }
 
-export function getMockTierForEmail(email: string | null | undefined): Tier {
+export function getMockTierForEmail(email?: string | null): Tier {
   if (email?.toLowerCase().includes("pro")) return "pro";
   return "free";
 }
