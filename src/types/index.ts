@@ -8,7 +8,6 @@ export interface ScanRequest {
   cost?: number;
 }
 
-/** Base는 최소 공통만 */
 export interface ScanResultBase {
   asin: string;
   title: string;
@@ -21,7 +20,6 @@ export interface ScanResultBase {
   isMock: boolean;
   generatedAt: string;
 
-  // ⚠️ PRO 전용은 base에서는 primitive or optional로만
   netMargin?: number;
   roi?: number;
   fees?: number;
@@ -29,7 +27,6 @@ export interface ScanResultBase {
   competition?: "low" | "medium" | "high";
 }
 
-/** PRO는 Base를 extend하지 않는다 (핵심 수정) */
 export interface ScanResultPro {
   asin: string;
   title: string;
@@ -54,3 +51,72 @@ export interface ScanResultPro {
 }
 
 export type ScanResult = ScanResultBase | ScanResultPro;
+
+export interface ApiErrorShape {
+  ok: false;
+  error: string;
+  code: string;
+  mock?: boolean;
+}
+
+export interface ApiOkShape<T> {
+  ok: true;
+  data: T;
+  mock: boolean;
+}
+
+export type ApiResponse<T> = ApiOkShape<T> | ApiErrorShape;
+
+export interface DbUser {
+  id: string;
+  email: string;
+  tier: Tier;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  stripeSubscriptionStatus: string | null;
+  createdAt: string;
+}
+
+export interface ServiceHealth {
+  db: "live" | "mock" | "error";
+  stripe: "live" | "mock" | "error";
+  email: "live" | "mock" | "error";
+  apify: "live" | "mock" | "error";
+}
+
+export interface TrendingHashtag {
+  hashtag: string;
+  rank: number | null;
+  viewCount: number | null;
+  videoCount: number | null;
+  industryCategory: string | null;
+  isMock: boolean;
+  fetchedAt: string;
+}
+
+export type TiktokQueryType = "hashtag" | "keyword";
+
+export interface TiktokVideoResult {
+  videoId: string | null;
+  authorUsername: string | null;
+  caption: string | null;
+  playCount: number | null;
+  likeCount: number | null;
+  commentCount: number | null;
+  shareCount: number | null;
+  videoUrl: string | null;
+  postedAt: string | null;
+  isMock: boolean;
+  fetchedAt: string;
+}
+
+export interface TiktokCacheMeta {
+  isMock: boolean;
+  lastRefreshedAt: string | null;
+}
+
+export interface RefreshResult {
+  status: "success" | "failed" | "mock_fallback";
+  itemsFetched: number;
+  errorMessage?: string;
+}
