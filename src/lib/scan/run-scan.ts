@@ -75,27 +75,7 @@ export async function runScan({
       amazon.rating ?? 0
     );
 
-    // 👉 BASE RESULT
-    base = {
-      asin: amazon.asin,
-      title: amazon.title,
-      price: amazon.price,
-
-      rating: amazon.rating ?? 0,
-      reviewCount: amazon.reviews ?? 0,
-
-      category: "Amazon",
-      isMock: !isPro,
-      generatedAt: new Date().toISOString(),
-
-      // PRO METRICS
-      netMargin: isPro ? marginData.margin : undefined,
-      roi: isPro ? marginData.roi : undefined,
-      fees: isPro ? marginData.fees.totalFees : undefined,
-      competition: isPro ? competition.level : undefined,
-    };
-
-    // 💣 VERDICT ENGINE
+    // 💣 VERDICT ENGINE (먼저 결정)
     let verdict: "BUY" | "SKIP" | "RISK";
 
     if (isPro) {
@@ -110,8 +90,7 @@ export async function runScan({
       verdict = "SKIP";
     }
 
-    base.verdict = verdict;
-    base.verdictReason = isPro
+    const verdictReason = isPro
       ? verdict === "BUY"
         ? "High margin + low competition"
         : verdict === "SKIP"
@@ -119,7 +98,37 @@ export async function runScan({
         : "Low margin or high competition"
       : "Upgrade to Pro for full analysis";
 
-    // PRO LAYER (future expansion)
+    // 👉 BASE RESULT (완전한 상태로 생성)
+    base = {
+      asin: amazon.asin,
+      title: amazon.title,
+      price: amazon.price,
+
+      rating: amazon.rating ?? 0,
+      reviewCount: amazon.reviews ?? 0,
+
+      category: "Amazon",
+      isMock: !isPro,
+      generatedAt: new Date().toISOString(),
+
+      // 반드시 초기값 포함
+      verdict,
+      verdictReason,
+
+      // PRO METRICS
+      netMargin: isPro ? marginData.margin : undefined,
+      roi: isPro ? marginData.roi : undefined,
+      fees: isPro ? marginData.fees.totalFees : undefined,
+      competition: isPro
+        ? {
+            sellerCount: competition.sellerCount,
+            buyBoxPrice: competition.buyBoxPrice,
+            competitionLevel: competition.level,
+          }
+        : undefined,
+    };
+
+    // PRO LAYER
     if (isPro) {
       pro = buildMockScanPro(asin, request.cost);
     }
@@ -129,11 +138,14 @@ export async function runScan({
     base = {
       asin: asin || "UNKNOWN",
       title: "Scan temporarily unavailable",
+
       verdict: "RISK",
       verdictReason: "System fallback activated",
+
       price: 0,
       rating: 0,
       reviewCount: 0,
+
       category: "Unknown",
       isMock: true,
       generatedAt: new Date().toISOString(),
