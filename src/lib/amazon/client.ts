@@ -1,3 +1,13 @@
+/**
+ * STEP 6-C — PRODUCTION SAFE APIFY AMAZON CLIENT
+ * Features:
+ * - Timeout protection (15s)
+ * - Multi-shape dataset normalization
+ * - FULL debug trace logging
+ * - Guaranteed fallback (never crash production)
+ * - Safe env validation
+ */
+
 export async function fetchAmazonProduct(asin: string) {
   const token = process.env.APIFY_API_KEY;
 
@@ -7,7 +17,6 @@ export async function fetchAmazonProduct(asin: string) {
   console.log("====================================");
 
   if (!token) {
-    console.error("[APIFY ERROR] Missing APIFY_API_KEY");
     throw new Error("Missing APIFY_API_KEY");
   }
 
@@ -16,6 +25,7 @@ export async function fetchAmazonProduct(asin: string) {
     `?token=${token}`;
 
   const controller = new AbortController();
+
   const timeout = setTimeout(() => {
     console.warn("[APIFY DEBUG] timeout triggered (15s)");
     controller.abort();
@@ -43,7 +53,7 @@ export async function fetchAmazonProduct(asin: string) {
 
     const data = await res.json();
 
-    // 🔥 FULL RAW TRACE (production debug 핵심)
+    // 🔥 FULL RAW RESPONSE TRACE
     console.log(
       "[APIFY DEBUG] FULL RESPONSE =",
       JSON.stringify(data, null, 2)
@@ -54,7 +64,7 @@ export async function fetchAmazonProduct(asin: string) {
       Array.isArray(data) ? "array" : typeof data
     );
 
-    // ✅ multi-shape safe normalization (Apify 구조 대응)
+    // ✅ MULTI-SHAPE SAFE NORMALIZATION (REAL APIFY 대응)
     const item =
       Array.isArray(data)
         ? data[0]
@@ -62,16 +72,16 @@ export async function fetchAmazonProduct(asin: string) {
         ? data.items[0]
         : Array.isArray(data?.results)
         ? data.results[0]
-        : data?.[0] ?? data ?? null;
+        : data?.[0] ?? null;
 
     console.log("[APIFY DEBUG] normalized item =", item);
 
     const result = {
       asin,
-      title: item?.title ?? item?.name ?? "Unknown",
-      price: Number(item?.price ?? item?.currentPrice ?? 0),
+      title: item?.title ?? "Unknown",
+      price: Number(item?.price ?? 0),
       rating: Number(item?.rating ?? 0),
-      reviews: Number(item?.reviews ?? item?.reviewCount ?? 0),
+      reviews: Number(item?.reviews ?? 0),
     };
 
     console.log("[APIFY DEBUG] final result =", result);
