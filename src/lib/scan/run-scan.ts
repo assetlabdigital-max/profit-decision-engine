@@ -24,7 +24,7 @@ export interface RunScanResult {
 }
 
 function extractAsin(req: ScanRequest): string {
-  if (req.asin?.trim()) return req.asin.trim().toUpperCase();
+  if (req.asin && req.asin.trim()) return req.asin.trim().toUpperCase();
 
   if (req.productUrl) {
     const match = req.productUrl.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i);
@@ -43,6 +43,7 @@ export async function runScan({
   const isPro = tier === "pro";
 
   let mock = false;
+
   let base: ScanResultBase;
   let pro: ScanResultPro | null = null;
 
@@ -67,7 +68,7 @@ export async function runScan({
     let verdict: "BUY" | "SKIP" | "RISK" = "SKIP";
 
     if (isPro) {
-      if (marginData.margin > 0.25 && competition.level === "low") {
+      if (marginData.margin > 0.25 && competition.level === "LOW") {
         verdict = "BUY";
       } else if (marginData.margin > 0.1) {
         verdict = "SKIP";
@@ -101,17 +102,17 @@ export async function runScan({
       roi: isPro ? marginData.roi : undefined,
       fees: isPro ? marginData.fees.totalFees : undefined,
 
-      competition: isPro
-        ? competition.level
-        : undefined,
+      competition: isPro ? competition.level : undefined,
     };
 
     if (isPro) {
       pro = buildMockScanPro(asin, request.cost);
     }
   } catch (err) {
+    console.error("[scan] system error fallback:", err);
+
     base = {
-      asin,
+      asin: asin || "UNKNOWN",
       title: "Scan temporarily unavailable",
       verdict: "RISK",
       verdictReason: "System fallback activated",
