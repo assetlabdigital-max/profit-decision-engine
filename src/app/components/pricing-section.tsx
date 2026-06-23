@@ -192,13 +192,10 @@ function FeatureRow({ text, highlight }: { text: string; highlight?: boolean }) 
           flexShrink: 0,
           marginTop: 1,
         }}
+        aria-hidden
       >
         ✓
       </span>
-      <span style={{ color: "var(--paper-dim)" }}>{text}</span>
-    </li>
-  );
-}
       <span style={{ color: "var(--paper-dim)" }}>{text}</span>
     </li>
   );
