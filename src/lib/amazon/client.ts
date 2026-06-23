@@ -39,11 +39,16 @@ export async function fetchAmazonProduct(asin: string) {
     if (!res.ok) {
       const text = await res.text();
       console.error("[APIFY DEBUG] response error body =", text);
-
       throw new Error(`Apify error: ${res.status}`);
     }
 
     const data = await res.json();
+
+    // ⭐ FULL RAW RESPONSE TRACE (핵심 추가)
+    console.log(
+      "[APIFY DEBUG] FULL RESPONSE =",
+      JSON.stringify(data, null, 2)
+    );
 
     console.log(
       "[APIFY DEBUG] items returned =",
@@ -68,7 +73,6 @@ export async function fetchAmazonProduct(asin: string) {
   } catch (err) {
     console.error("[APIFY DEBUG] fetch failed:", err);
 
-    // graceful fallback (never break production)
     return {
       asin,
       title: "Fallback Product",
