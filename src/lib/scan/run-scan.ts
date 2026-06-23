@@ -43,7 +43,6 @@ export async function runScan({
   const isPro = tier === "pro";
 
   let mock = false;
-
   let base: ScanResultBase;
   let pro: ScanResultPro | null = null;
 
@@ -89,10 +88,8 @@ export async function runScan({
       asin: amazon.asin,
       title: amazon.title,
       price: amazon.price,
-
       rating: amazon.rating ?? 0,
       reviewCount: amazon.reviews ?? 0,
-
       category: "Amazon",
       isMock: !isPro,
       generatedAt: new Date().toISOString(),
@@ -113,19 +110,14 @@ export async function runScan({
       pro = buildMockScanPro(asin, request.cost);
     }
   } catch (err) {
-    console.error("[scan] system error fallback:", err);
-
     base = {
-      asin: asin || "UNKNOWN",
+      asin,
       title: "Scan temporarily unavailable",
-
       verdict: "RISK",
       verdictReason: "System fallback activated",
-
       price: 0,
       rating: 0,
       reviewCount: 0,
-
       category: "Unknown",
       isMock: true,
       generatedAt: new Date().toISOString(),
