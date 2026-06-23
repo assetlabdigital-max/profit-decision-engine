@@ -1,55 +1,77 @@
 export async function fetchAmazonProduct(asin: string) {
-  const token = process.env.APIFY_API_KEY;
+const token = process.env.APIFY_API_KEY;
 
-  if (!token) {
-    throw new Error("Missing APIFY_API_KEY");
-  }
+console.log("[APIFY DEBUG] token exists =", !!token);
+console.log("[APIFY DEBUG] asin =", asin);
 
-  const url =
-    `https://api.apify.com/v2/acts/dtrungtin~amazon-scraper/run-sync-get-dataset-items` +
-    `?token=${token}`;
+if (!token) {
+throw new Error("Missing APIFY_API_KEY");
+}
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+const url =
+`https://api.apify.com/v2/acts/dtrungtin~amazon-scraper/run-sync-get-dataset-items` +
+`?token=${token}`;
 
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        asin,
-      }),
-    });
+const controller = new AbortController();
+const timeout = setTimeout(() => controller.abort(), 15000);
 
-    if (!res.ok) {
-      throw new Error(`Apify error: ${res.status}`);
-    }
+try {
+console.log("[APIFY DEBUG] calling Apify...");
 
-    const data = await res.json();
-    const item = data?.[0];
+```
+const res = await fetch(url, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  signal: controller.signal,
+  body: JSON.stringify({
+    asin,
+  }),
+});
 
-    return {
-      asin,
-      title: item?.title ?? "Unknown",
-      price: Number(item?.price ?? 0),
-      rating: Number(item?.rating ?? 0),
-      reviews: Number(item?.reviews ?? 0),
-    };
-  } catch (err) {
-    console.error("[Apify] fetch failed:", err);
+console.log("[APIFY DEBUG] status =", res.status);
 
-    // graceful fallback (never crash production)
-    return {
-      asin,
-      title: "Fallback Product",
-      price: 0,
-      rating: 0,
-      reviews: 0,
-    };
-  } finally {
-    clearTimeout(timeout);
-  }
+if (!res.ok) {
+  const text = await res.text();
+  console.error("[APIFY DEBUG] response =", text);
+  throw new Error(`Apify error: ${res.status}`);
+}
+
+const data = await res.json();
+
+console.log(
+  "[APIFY DEBUG] items returned =",
+  Array.isArray(data) ? data.length : "not-array"
+);
+
+const item = data?.[0];
+
+console.log("[APIFY DEBUG] first item =", item);
+
+return {
+  asin,
+  title: item?.title ?? "Unknown",
+  price: Number(item?.price ?? 0),
+  rating: Number(item?.rating ?? 0),
+  reviews: Number(item?.reviews ?? 0),
+};
+```
+
+} catch (err) {
+console.error("[APIFY DEBUG] fetch failed:", err);
+
+```
+return {
+  asin,
+  title: "Fallback Product",
+  price: 0,
+  rating: 0,
+  reviews: 0,
+};
+```
+
+} finally {
+clearTimeout(timeout);
+}
 }
