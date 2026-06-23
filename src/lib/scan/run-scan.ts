@@ -3,15 +3,13 @@ import type {
   ScanResultBase,
   ScanResultPro,
   Tier,
-  Verdict,
 } from "@/types";
 
-import { buildMockScanPro } from "@/lib/mock/mock-data";
-import { recordScan } from "@/lib/db/users";
 import { fetchAmazonProduct } from "@/lib/amazon/client";
-
 import { calculateMargin } from "./margin";
 import { calculateCompetition } from "./competition";
+import { buildMockScanPro } from "@/lib/mock/mock-data";
+import { recordScan } from "@/lib/db/users";
 
 export interface RunScanParams {
   request: ScanRequest;
@@ -33,11 +31,6 @@ function extractAsin(req: ScanRequest): string {
   }
 
   return "UNKNOWN";
-}
-
-function normalizeCompetition(level: string): "low" | "medium" | "high" {
-  if (level === "low" || level === "medium" || level === "high") return level;
-  return "low";
 }
 
 export async function runScan({
@@ -65,37 +58,37 @@ export async function runScan({
         };
 
     const marginData = calculateMargin(amazon.price, request.cost ?? 0);
-
     const competition = calculateCompetition(
       amazon.reviews ?? 0,
       amazon.rating ?? 0
     );
 
-    let verdict: Verdict = "SKIP";
+    const competitionLevel: "low" | "medium" | "high" =
+      competition.level === "low" ||
+      competition.level === "medium" ||
+      competition.level === "high"
+        ? competition.level
+        : "low";
 
-    if (isPro) {
-      if (marginData.margin > 0.25 && competition.level === "low") {
-        verdict = "BUY";
-      } else if (marginData.margin > 0.1) {
-        verdict = "SKIP";
-      } else {
-        verdict = "RISK";
-      }
-    }
+    const verdict: "BUY" | "SKIP" | "RISK" =
+      marginData.margin > 0.25 && competitionLevel === "low"
+        ? "BUY"
+        : marginData.margin > 0.1
+        ? "SKIP"
+        : "RISK";
 
-    const verdictReason = isPro
-      ? verdict === "BUY"
+    const verdictReason =
+      verdict === "BUY"
         ? "High margin + low competition"
         : verdict === "SKIP"
         ? "Moderate opportunity"
-        : "Low margin or high risk"
-      : "Upgrade to Pro for full analysis";
+        : "Low margin or high competition";
 
     base = {
       asin: amazon.asin,
       title: amazon.title,
-      price: amazon.price,
 
+      price: amazon.price,
       rating: amazon.rating ?? 0,
       reviewCount: amazon.reviews ?? 0,
 
@@ -110,7 +103,7 @@ export async function runScan({
       roi: isPro ? marginData.roi : undefined,
       fees: isPro ? marginData.fees.totalFees : undefined,
 
-      competition: isPro ? normalizeCompetition(competition.level) : undefined,
+      competition: isPro ? competitionLevel : undefined,
     };
 
     if (isPro) {
@@ -122,14 +115,14 @@ export async function runScan({
     base = {
       asin,
       title: "Scan temporarily unavailable",
-      verdict: "RISK",
-      verdictReason: "System fallback activated",
       price: 0,
       rating: 0,
       reviewCount: 0,
       category: "Unknown",
       isMock: true,
       generatedAt: new Date().toISOString(),
+      verdict: "RISK",
+      verdictReason: "System fallback activated",
     };
 
     mock = true;
