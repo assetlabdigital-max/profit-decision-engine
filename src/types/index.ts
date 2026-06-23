@@ -8,41 +8,43 @@ export interface ScanRequest {
   cost?: number;
 }
 
-/** Base result (free + shared fields) */
+/** Base는 최소 공통만 */
 export interface ScanResultBase {
   asin: string;
   title: string;
   verdict: Verdict;
   verdictReason: string;
-
   price: number;
   rating: number;
   reviewCount: number;
-
   category: string;
   isMock: boolean;
   generatedAt: string;
 
-  // optional pro preview fields
+  // ⚠️ PRO 전용은 base에서는 primitive or optional로만
   netMargin?: number;
   roi?: number;
   fees?: number;
+
+  competition?: "low" | "medium" | "high";
 }
 
-/** Pro-only expansion */
-export interface ScanResultPro extends ScanResultBase {
-  estimatedFees: {
-    referralFee: number;
-    fbaFee: number;
-    totalFees: number;
-  };
+/** PRO는 Base를 extend하지 않는다 (핵심 수정) */
+export interface ScanResultPro {
+  asin: string;
+  title: string;
+  verdict: Verdict;
+  verdictReason: string;
+  price: number;
+  rating: number;
+  reviewCount: number;
+  category: string;
+  isMock: boolean;
+  generatedAt: string;
 
-  profit: {
-    unitCost: number;
-    netProfit: number;
-    marginPercent: number;
-    roiPercent: number;
-  };
+  netMargin: number;
+  roi: number;
+  fees: number;
 
   competition: {
     sellerCount: number;
@@ -50,3 +52,5 @@ export interface ScanResultPro extends ScanResultBase {
     competitionLevel: "low" | "medium" | "high";
   };
 }
+
+export type ScanResult = ScanResultBase | ScanResultPro;
