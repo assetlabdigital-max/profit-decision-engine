@@ -44,20 +44,28 @@ export async function fetchAmazonProduct(asin: string) {
 
     const data = await res.json();
 
-    // ⭐ FULL RAW RESPONSE TRACE (핵심 추가)
+    // 🔥 FULL RESPONSE TRACE (production debug 핵심)
     console.log(
       "[APIFY DEBUG] FULL RESPONSE =",
       JSON.stringify(data, null, 2)
     );
 
     console.log(
-      "[APIFY DEBUG] items returned =",
-      Array.isArray(data) ? data.length : typeof data
+      "[APIFY DEBUG] raw type =",
+      Array.isArray(data) ? "array" : typeof data
     );
 
-    const item = Array.isArray(data) ? data[0] : null;
+    // ✅ SAFE DATA NORMALIZATION (핵심 FIX)
+    const item =
+      Array.isArray(data)
+        ? data[0]
+        : Array.isArray(data?.items)
+        ? data.items[0]
+        : Array.isArray(data?.results)
+        ? data.results[0]
+        : data?.[0] ?? null;
 
-    console.log("[APIFY DEBUG] first item =", item);
+    console.log("[APIFY DEBUG] normalized item =", item);
 
     const result = {
       asin,
@@ -67,12 +75,13 @@ export async function fetchAmazonProduct(asin: string) {
       reviews: Number(item?.reviews ?? 0),
     };
 
-    console.log("[APIFY DEBUG] normalized result =", result);
+    console.log("[APIFY DEBUG] final result =", result);
 
     return result;
   } catch (err) {
     console.error("[APIFY DEBUG] fetch failed:", err);
 
+    // graceful fallback (NEVER break production)
     return {
       asin,
       title: "Fallback Product",
