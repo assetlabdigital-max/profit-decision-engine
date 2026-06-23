@@ -75,7 +75,7 @@ export async function runScan({
       amazon.rating ?? 0
     );
 
-    // 💣 VERDICT ENGINE (먼저 결정)
+    // 💣 VERDICT ENGINE
     let verdict: "BUY" | "SKIP" | "RISK";
 
     if (isPro) {
@@ -98,7 +98,7 @@ export async function runScan({
         : "Low margin or high competition"
       : "Upgrade to Pro for full analysis";
 
-    // 👉 BASE RESULT (완전한 상태로 생성)
+    // 👉 BASE RESULT (TYPE SAFE FIXED)
     base = {
       asin: amazon.asin,
       title: amazon.title,
@@ -111,20 +111,16 @@ export async function runScan({
       isMock: !isPro,
       generatedAt: new Date().toISOString(),
 
-      // 반드시 초기값 포함
+      // 반드시 base에 존재해야 하는 필드
       verdict,
       verdictReason,
 
-      // PRO METRICS
+      // PRO METRICS (Base에도 허용된 optional 구조 기준)
       netMargin: isPro ? marginData.margin : undefined,
       roi: isPro ? marginData.roi : undefined,
       fees: isPro ? marginData.fees.totalFees : undefined,
       competition: isPro
-        ? {
-            sellerCount: competition.sellerCount,
-            buyBoxPrice: competition.buyBoxPrice,
-            competitionLevel: competition.level,
-          }
+        ? competition.level
         : undefined,
     };
 
