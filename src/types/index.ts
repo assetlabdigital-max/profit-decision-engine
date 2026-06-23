@@ -8,6 +8,8 @@ export interface ScanRequest {
   cost?: number;
 }
 
+/* ---------------- BASE ---------------- */
+
 export interface ScanResultBase {
   asin: string;
   title: string;
@@ -27,21 +29,21 @@ export interface ScanResultBase {
   competition?: "low" | "medium" | "high";
 }
 
-export interface ScanResultPro {
-  asin: string;
-  title: string;
-  verdict: Verdict;
-  verdictReason: string;
-  price: number;
-  rating: number;
-  reviewCount: number;
-  category: string;
-  isMock: boolean;
-  generatedAt: string;
+/* ---------------- PRO ---------------- */
 
-  netMargin: number;
-  roi: number;
-  fees: number;
+export interface ScanResultPro extends ScanResultBase {
+  estimatedFees: {
+    referralFee: number;
+    fbaFee: number;
+    totalFees: number;
+  };
+
+  profit: {
+    unitCost: number;
+    netProfit: number;
+    marginPercent: number;
+    roiPercent: number;
+  };
 
   competition: {
     sellerCount: number;
@@ -50,7 +52,10 @@ export interface ScanResultPro {
   };
 }
 
-/* ===== API ===== */
+/* ---------------- EXPORT FIX ---------------- */
+export type ScanResult = ScanResultBase | ScanResultPro;
+
+/* ---------------- API ---------------- */
 
 export interface ApiErrorShape {
   ok: false;
@@ -67,7 +72,7 @@ export interface ApiOkShape<T> {
 
 export type ApiResponse<T> = ApiOkShape<T> | ApiErrorShape;
 
-/* ===== SYSTEM ===== */
+/* ---------------- SYSTEM ---------------- */
 
 export interface DbUser {
   id: string;
@@ -86,7 +91,7 @@ export interface ServiceHealth {
   apify: "live" | "mock" | "error";
 }
 
-/* ===== TIKTOK ===== */
+/* ---------------- TIKTOK ---------------- */
 
 export interface TrendingHashtag {
   hashtag: string;
