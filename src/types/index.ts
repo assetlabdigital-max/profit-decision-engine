@@ -26,10 +26,18 @@ export interface ScanResultBase {
   category: string;
   isMock: boolean;
   generatedAt: string;
-    netMargin?: number;
+
+  // PRO optional metrics (safe to exist in free tier as undefined)
+  netMargin?: number;
   roi?: number;
   fees?: number;
-  competition?: string;
+
+  // FIX: must match Pro structure (NOT string)
+  competition?: {
+    sellerCount: number;
+    buyBoxPrice: number;
+    competitionLevel: "low" | "medium" | "high";
+  };
 }
 
 /** Extra fields Pro tier receives on top of the base fields. */
@@ -39,16 +47,12 @@ export interface ScanResultPro extends ScanResultBase {
     fbaFee: number;
     totalFees: number;
   };
+
   profit: {
     unitCost: number;
     netProfit: number;
     marginPercent: number;
     roiPercent: number;
-  };
-  competition: {
-    sellerCount: number;
-    buyBoxPrice: number;
-    competitionLevel: "low" | "medium" | "high";
   };
 }
 
