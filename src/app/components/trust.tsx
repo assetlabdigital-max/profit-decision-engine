@@ -1,4 +1,4 @@
-import { Eyebrow } from "@/app/components/demo";
+import { Eyebrow } from "@/app/components/ui";
 
 const COMPARISON = [
   {
