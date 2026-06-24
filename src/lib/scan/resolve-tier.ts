@@ -31,10 +31,17 @@ export async function resolveTier(): Promise<ResolvedTier> {
     console.log("[resolveTier DEBUG] email =", email);
 
     if (!email) {
+      const tier: Tier = "free";
+
       console.log("[resolveTier DEBUG] anonymous user -> FREE");
 
+      // 🔥 FINAL TIER TRACE (REQUESTED FIX)
+      console.log("================================");
+      console.log("[resolveTier DEBUG FINAL tier =", tier);
+      console.log("================================");
+
       return {
-        tier: "free",
+        tier,
         userId: null,
         email: null,
         usedFallback: false,
@@ -54,8 +61,15 @@ export async function resolveTier(): Promise<ResolvedTier> {
       console.log("[resolveTier DEBUG] DB user =", user);
       console.log("[resolveTier DEBUG] DB tier =", user.tier);
 
+      const tier: Tier = user.tier;
+
+      // 🔥 FINAL TIER TRACE (DB PATH)
+      console.log("================================");
+      console.log("[resolveTier DEBUG FINAL tier =", tier);
+      console.log("================================");
+
       return {
-        tier: user.tier,
+        tier,
         userId: user.id,
         email,
         usedFallback: mock,
@@ -66,8 +80,15 @@ export async function resolveTier(): Promise<ResolvedTier> {
         dbErr
       );
 
+      const tier: Tier = sessionTier;
+
+      // 🔥 FINAL TIER TRACE (SESSION FALLBACK PATH)
+      console.log("================================");
+      console.log("[resolveTier DEBUG FINAL tier =", tier);
+      console.log("================================");
+
       return {
-        tier: sessionTier,
+        tier,
         userId: null,
         email,
         usedFallback: true,
@@ -79,8 +100,15 @@ export async function resolveTier(): Promise<ResolvedTier> {
       err
     );
 
+    const tier: Tier = "free";
+
+    // 🔥 FINAL TIER TRACE (AUTH FAILURE PATH)
+    console.log("================================");
+    console.log("[resolveTier DEBUG FINAL tier =", tier);
+    console.log("================================");
+
     return {
-      tier: "free",
+      tier,
       userId: null,
       email: null,
       usedFallback: true,
