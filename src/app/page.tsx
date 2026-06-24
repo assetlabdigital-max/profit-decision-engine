@@ -6,31 +6,25 @@ export default function PricingPage() {
   const [loading, setLoading] = useState(false);
 
   const handleCheckout = async () => {
-    try {
-      setLoading(true);
+    setLoading(true);
 
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+    const res = await fetch("/api/stripe/checkout", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: "test@example.com", // 로그인 시스템 있으면 교체
+      }),
+    });
 
-        // optional: email 전달 (로그인 시스템 있으면 연결)
-        body: JSON.stringify({
-          email: null,
-        }),
-      });
+    const data = await res.json();
 
-      const data = await res.json();
-
-      if (data?.url) {
-        window.location.href = data.url;
-      }
-    } catch (err) {
-      console.error("Checkout error:", err);
-    } finally {
-      setLoading(false);
+    if (data.url) {
+      window.location.href = data.url;
     }
+
+    setLoading(false);
   };
 
   return (
@@ -49,7 +43,7 @@ export default function PricingPage() {
           borderRadius: 8,
         }}
       >
-        {loading ? "Redirecting..." : "Upgrade to Pro"}
+        {loading ? "Loading..." : "Upgrade to Pro"}
       </button>
     </div>
   );
