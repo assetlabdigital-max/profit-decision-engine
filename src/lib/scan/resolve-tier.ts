@@ -1,8 +1,8 @@
 /**
  * src/lib/scan/resolve-tier.ts
  *
- * DEBUG VERSION
- * Tier resolution logging enabled
+ * DEBUG VERSION — FULL VISIBILITY ENABLED
+ * SAFE FOR PRODUCTION (NO THROW GUARANTEE)
  */
 
 import { auth } from "@/auth/auth";
@@ -20,16 +20,17 @@ export async function resolveTier(): Promise<ResolvedTier> {
   try {
     const session = await auth();
 
-    console.log("================================");
-    console.log("[resolveTier] session =", session);
-    console.log("================================");
+    // 🔥 STEP 7 DEBUG BLOCK (SESSION TRACE)
+    console.log("====================================");
+    console.log("[resolveTier DEBUG] session =", session);
+    console.log("====================================");
 
     const email = session?.user?.email ?? null;
 
-    console.log("[resolveTier] email =", email);
+    console.log("[resolveTier DEBUG] email =", email);
 
     if (!email) {
-      console.log("[resolveTier] anonymous user -> FREE");
+      console.log("[resolveTier DEBUG] anonymous user -> FREE");
 
       return {
         tier: "free",
@@ -42,13 +43,15 @@ export async function resolveTier(): Promise<ResolvedTier> {
     const sessionTier =
       ((session?.user as any)?.tier as Tier) ?? "free";
 
-    console.log("[resolveTier] session tier =", sessionTier);
+    console.log("[resolveTier DEBUG] sessionTier =", sessionTier);
 
     try {
       const { user, mock } = await getUserByEmail(email);
 
-      console.log("[resolveTier] DB user =", user);
-      console.log("[resolveTier] DB tier =", user.tier);
+      console.log("====================================");
+      console.log("[resolveTier DEBUG] DB USER =", user);
+      console.log("[resolveTier DEBUG] DB TIER =", user.tier);
+      console.log("====================================");
 
       return {
         tier: user.tier,
@@ -58,7 +61,7 @@ export async function resolveTier(): Promise<ResolvedTier> {
       };
     } catch (dbErr) {
       console.error(
-        "[resolveTier] DB lookup failed, using JWT tier:",
+        "[resolveTier DEBUG] DB lookup failed → fallback to JWT tier",
         dbErr
       );
 
@@ -71,7 +74,7 @@ export async function resolveTier(): Promise<ResolvedTier> {
     }
   } catch (err) {
     console.error(
-      "[resolveTier] auth() failed, defaulting FREE:",
+      "[resolveTier DEBUG] auth() failed → FORCE FREE",
       err
     );
 
