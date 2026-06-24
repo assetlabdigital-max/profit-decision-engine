@@ -1,19 +1,13 @@
 /**
- * STEP 6-C — PRODUCTION SAFE APIFY AMAZON CLIENT (FINAL STABLE VERSION)
- *
- * FEATURES:
- * - 15s timeout protection (AbortController)
- * - FULL DEBUG TRACE (production-safe logging)
- * - Multi-shape Apify dataset normalization
- * - Defensive parsing for ALL known Apify formats
- * - Safe env validation (never silent fail)
- * - Guaranteed fallback (NEVER break production)
+ * STEP 7-C FINAL — REAL APIFY AMAZON SCRAPER CLIENT
+ * Production-safe + full debug trace + multi-shape support
  */
 
 export async function fetchAmazonProduct(asin: string) {
   const token = process.env.APIFY_API_KEY;
 
   console.log("====================================");
+  console.log("[APIFY DEBUG] STEP 7 START");
   console.log("[APIFY DEBUG] token exists =", !!token);
   console.log("[APIFY DEBUG] asin =", asin);
   console.log("====================================");
@@ -35,7 +29,7 @@ export async function fetchAmazonProduct(asin: string) {
   }, 15000);
 
   try {
-    console.log("[APIFY DEBUG] calling Apify...");
+    console.log("[APIFY DEBUG] calling Apify... 🔥 REAL REQUEST START");
 
     const res = await fetch(url, {
       method: "POST",
@@ -50,13 +44,13 @@ export async function fetchAmazonProduct(asin: string) {
 
     if (!res.ok) {
       const text = await res.text();
-      console.error("[APIFY DEBUG] response error body =", text);
+      console.error("[APIFY DEBUG] ERROR RESPONSE BODY =", text);
       throw new Error(`Apify error: ${res.status}`);
     }
 
     const data = await res.json();
 
-    // 🔥 FULL RAW RESPONSE TRACE (CRITICAL DEBUG)
+    // 🔥 FULL RAW TRACE (CRITICAL STEP 7 CHECK)
     console.log(
       "[APIFY DEBUG] FULL RESPONSE =",
       JSON.stringify(data, null, 2)
@@ -67,7 +61,7 @@ export async function fetchAmazonProduct(asin: string) {
       Array.isArray(data) ? "array" : typeof data
     );
 
-    // ✅ SAFE MULTI-SHAPE NORMALIZATION (Apify real-world 대응)
+    // 🔥 REAL APIFY SHAPE NORMALIZER (robust)
     const item =
       Array.isArray(data)
         ? data[0]
@@ -89,13 +83,12 @@ export async function fetchAmazonProduct(asin: string) {
       reviews: Number(item?.reviews ?? item?.reviewCount ?? 0),
     };
 
-    console.log("[APIFY DEBUG] final result =", result);
+    console.log("[APIFY DEBUG] final normalized result =", result);
 
     return result;
   } catch (err) {
-    console.error("[APIFY DEBUG] fetch failed:", err);
+    console.error("[APIFY DEBUG] fetch failed (SAFE FALLBACK):", err);
 
-    // 🚨 GUARANTEED PRODUCTION FALLBACK
     return {
       asin,
       title: "Fallback Product",
