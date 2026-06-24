@@ -1,8 +1,8 @@
 /**
  * src/lib/scan/resolve-tier.ts
  *
- * DEBUG VERSION — FULL VISIBILITY ENABLED
- * SAFE FOR PRODUCTION (NO THROW GUARANTEE)
+ * DEBUG VERSION
+ * Tier resolution logging enabled (STEP 7)
  */
 
 import { auth } from "@/auth/auth";
@@ -20,13 +20,14 @@ export async function resolveTier(): Promise<ResolvedTier> {
   try {
     const session = await auth();
 
-    // 🔥 STEP 7 DEBUG BLOCK (SESSION TRACE)
-    console.log("====================================");
+    // 🔥 DEBUG TRACE 1
+    console.log("================================");
     console.log("[resolveTier DEBUG] session =", session);
-    console.log("====================================");
+    console.log("================================");
 
     const email = session?.user?.email ?? null;
 
+    // 🔥 DEBUG TRACE 2
     console.log("[resolveTier DEBUG] email =", email);
 
     if (!email) {
@@ -43,15 +44,15 @@ export async function resolveTier(): Promise<ResolvedTier> {
     const sessionTier =
       ((session?.user as any)?.tier as Tier) ?? "free";
 
+    // 🔥 DEBUG TRACE 3
     console.log("[resolveTier DEBUG] sessionTier =", sessionTier);
 
     try {
       const { user, mock } = await getUserByEmail(email);
 
-      console.log("====================================");
-      console.log("[resolveTier DEBUG] DB USER =", user);
-      console.log("[resolveTier DEBUG] DB TIER =", user.tier);
-      console.log("====================================");
+      // 🔥 DB TRACE
+      console.log("[resolveTier DEBUG] DB user =", user);
+      console.log("[resolveTier DEBUG] DB tier =", user.tier);
 
       return {
         tier: user.tier,
@@ -61,7 +62,7 @@ export async function resolveTier(): Promise<ResolvedTier> {
       };
     } catch (dbErr) {
       console.error(
-        "[resolveTier DEBUG] DB lookup failed → fallback to JWT tier",
+        "[resolveTier DEBUG] DB lookup failed, fallback to session tier:",
         dbErr
       );
 
@@ -74,7 +75,7 @@ export async function resolveTier(): Promise<ResolvedTier> {
     }
   } catch (err) {
     console.error(
-      "[resolveTier DEBUG] auth() failed → FORCE FREE",
+      "[resolveTier DEBUG] auth() failed -> FREE fallback:",
       err
     );
 
