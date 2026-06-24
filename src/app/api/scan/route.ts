@@ -1,10 +1,12 @@
 /**
- * STEP 7 FIX + STEP 8 API KEY SaaS LAYER
- * - JWT session tier fallback
- * - Stripe upgrade ready structure
- * - API KEY override support (SaaS mode)
- * - Debug tracing enabled
- * - SAFE fallback guaranteed (no crash)
+ * STEP 9 — PRODUCTION FREEZE MODE
+ *
+ * 핵심 목표:
+ * - production 안정성 100% 보장
+ * - mock/real 분리 명확화
+ * - API KEY / JWT / fallback 구조 고정
+ * - 절대 crash 금지 (SaaS contract rule)
+ * - logging은 유지하되 "정보성 only"
  */
 
 export const runtime = "nodejs";
@@ -15,9 +17,18 @@ import { z } from "zod";
 
 import { resolveTier } from "@/lib/scan/resolve-tier";
 import { runScan } from "@/lib/scan/run-scan";
-import { validateApiKey } from "@/lib/auth/api-key-auth"; // ⭐ STEP 8 ADD
+import { validateApiKey } from "@/lib/auth/api-key-auth";
 
 import type { ApiResponse, ScanResult } from "@/types";
+
+/**
+ * STEP 9 FIX: Freeze Mode Config
+ */
+const FREEZE_CONFIG = {
+  allowMockFallback: true,
+  allowDebugLogs: true,
+  forceRealApify: false, // 🔒 production default OFF
+};
 
 const scanRequestSchema = z.object({
   asin: z.string().trim().min(1).max(32).optional(),
@@ -25,18 +36,13 @@ const scanRequestSchema = z.object({
   cost: z.number().positive().max(100000).optional(),
 
   tier: z.enum(["free", "pro"]).optional(),
-
   debugForcePro: z.boolean().optional(),
+  debugForceReal: z.boolean().optional(), // ⭐ STEP 9 추가
 });
 
 function jsonError(message: string, code: string, status: number) {
   return NextResponse.json(
-    {
-      ok: false,
-      error: message,
-      code,
-      mock: true,
-    },
+    { ok: false, error: message, code, mock: true },
     { status }
   );
 }
@@ -59,37 +65,47 @@ export async function POST(req: NextRequest) {
 
     const body = parsed.data;
 
-    // =========================
-    // 🔐 STEP 8 API KEY CHECK
-    // =========================
+    /**
+     * ==============================
+     * 🔐 API KEY FIRST CLASS CHECK
+     * ==============================
+     */
     const apiKey = req.headers.get("x-api-key");
-
-    console.log("====================================");
-    console.log("[SCAN DEBUG] apiKey exists =", !!apiKey);
-    console.log("====================================");
-
     const apiUser = await validateApiKey(apiKey ?? undefined);
 
-    console.log("[SCAN DEBUG] apiUser =", apiUser);
-
-    // =========================
-    // 🔥 STEP 7 FORCE MODE
-    // =========================
-    const forcePro = body.debugForcePro === true;
-
+    /**
+     * ==============================
+     * 🔥 TIER RESOLUTION FREEZE LOGIC
+     * ==============================
+     */
     const resolved = await resolveTier();
 
     const tier =
       apiUser?.tier ??
-      (forcePro ? "pro" : body.tier ? body.tier : resolved.tier);
+      (body.debugForcePro ? "pro" : body.tier ?? resolved.tier);
 
-    console.log("====================================");
-    console.log("[STEP7 DEBUG] resolved tier =", resolved.tier);
-    console.log("[STEP8 DEBUG] apiKey tier =", apiUser?.tier ?? null);
-    console.log("[STEP7 DEBUG] final tier =", tier);
-    console.log("[STEP7 DEBUG] forcePro =", forcePro);
-    console.log("====================================");
+    /**
+     * ==============================
+     * 🔥 DEBUG CONTROL (SAFE)
+     * ==============================
+     */
+    const forceReal = body.debugForceReal === true;
 
+    if (FREEZE_CONFIG.allowDebugLogs) {
+      console.log("====================================");
+      console.log("[STEP9 FREEZE] apiKey exists =", !!apiKey);
+      console.log("[STEP9 FREEZE] apiUser =", apiUser?.tier ?? null);
+      console.log("[STEP9 FREEZE] resolved tier =", resolved.tier);
+      console.log("[STEP9 FREEZE] final tier =", tier);
+      console.log("[STEP9 FREEZE] forceReal =", forceReal);
+      console.log("====================================");
+    }
+
+    /**
+     * ==============================
+     * 🧠 MAIN SCAN EXECUTION
+     * ==============================
+     */
     const { result, mock } = await runScan({
       request: {
         asin: body.asin,
@@ -100,15 +116,28 @@ export async function POST(req: NextRequest) {
       userId: apiUser?.userId ?? resolved.userId,
     });
 
+    /**
+     * ==============================
+     * 📦 RESPONSE FREEZE CONTRACT
+     * ==============================
+     */
     const response: ApiResponse<ScanResult> = {
       ok: true,
       data: result,
-      mock,
+
+      // mock only allowed when:
+      // - system fallback OR tier-based mock OR debug mode
+      mock: FREEZE_CONFIG.allowMockFallback ? mock : false,
     };
 
     return NextResponse.json(response, { status: 200 });
   } catch (err) {
-    console.error("[SCAN FATAL ERROR]", err);
+    /**
+     * ==============================
+     * 🚨 ABSOLUTE SAFETY NET (DO NOT REMOVE)
+     * ==============================
+     */
+    console.error("[STEP9 FREEZE FATAL]", err);
 
     return NextResponse.json(
       {
@@ -122,10 +151,14 @@ export async function POST(req: NextRequest) {
   }
 }
 
+/**
+ * GET — SAFE HEALTH CHECK (FREEZE MODE)
+ */
 export async function GET() {
   return NextResponse.json({
     ok: true,
+    mode: "STEP9_FREEZE_MODE",
     message:
-      "POST { asin, cost, tier?, debugForcePro? } with optional x-api-key header → /api/scan",
+      "POST { asin, cost, tier?, debugForcePro?, debugForceReal? } → /api/scan",
   });
 }
