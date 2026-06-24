@@ -1,13 +1,22 @@
-import Nav from "@/app/components/nav";
-import Hero from "@/app/components/hero";
-import Demo from "@/app/components/demo";
+"use client";
 
-export default function HomePage() {
+export default function PricingPage() {
+  const handleCheckout = async () => {
+    const res = await fetch("/api/checkout", {
+      method: "POST",
+    });
+
+    const data = await res.json();
+    window.location.href = data.url;
+  };
+
   return (
-    <>
-      <Nav />
-      <Hero />
-      <Demo />
-    </>
+    <div>
+      <h1>Upgrade to Pro</h1>
+
+      <button onClick={handleCheckout}>
+        Start $9.99 Pro Plan
+      </button>
+    </div>
   );
 }
