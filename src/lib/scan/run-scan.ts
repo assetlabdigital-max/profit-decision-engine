@@ -41,13 +41,33 @@ export async function runScan({
   const asin = extractAsin(request);
   const isPro = tier === "pro";
 
+  // 🔥 STEP 8 DEBUG TRACE (ENTRY)
+  console.log("====================================");
+  console.log("[runScan DEBUG] START");
+  console.log("[runScan DEBUG] tier =", tier);
+  console.log("[runScan DEBUG] isPro =", isPro);
+  console.log("[runScan DEBUG] asin =", asin);
+  console.log("====================================");
+
   let mock = false;
 
   let base: ScanResultBase;
   let pro: ScanResultPro | null = null;
 
   try {
-    const amazon = isPro
+    // 🔥 CRITICAL: APIFY CALL DECISION TRACE
+    console.log("[runScan DEBUG] about to decide data source...");
+
+    const FORCE_REAL_APIFY = false; // change to true for hard debug mode
+
+    const shouldUseApify = FORCE_REAL_APIFY || isPro;
+
+    console.log("[runScan DEBUG] FORCE_REAL_APIFY =", FORCE_REAL_APIFY);
+    console.log("[runScan DEBUG] shouldUseApify =", shouldUseApify);
+
+    console.log("[runScan DEBUG] calling data layer...");
+
+    const amazon = shouldUseApify
       ? await fetchAmazonProduct(asin)
       : {
           asin,
@@ -56,6 +76,8 @@ export async function runScan({
           rating: 4 + Math.random(),
           reviews: Math.floor(Math.random() * 1000),
         };
+
+    console.log("[runScan DEBUG] AMAZON RAW RESULT =", amazon);
 
     const marginData = calculateMargin(amazon.price, request.cost ?? 0);
     const competition = calculateCompetition(
@@ -93,24 +115,27 @@ export async function runScan({
       reviewCount: amazon.reviews ?? 0,
 
       category: "Amazon",
-      isMock: !isPro,
+
+      // 🔥 FIXED LOGIC (IMPORTANT)
+      isMock: !shouldUseApify,
+
       generatedAt: new Date().toISOString(),
 
       verdict,
       verdictReason,
 
-      netMargin: isPro ? marginData.margin : undefined,
-      roi: isPro ? marginData.roi : undefined,
-      fees: isPro ? marginData.fees.totalFees : undefined,
+      netMargin: shouldUseApify ? marginData.margin : undefined,
+      roi: shouldUseApify ? marginData.roi : undefined,
+      fees: shouldUseApify ? marginData.fees.totalFees : undefined,
 
-      competition: isPro ? competitionLevel : undefined,
+      competition: shouldUseApify ? competitionLevel : undefined,
     };
 
-    if (isPro) {
+    if (shouldUseApify && isPro) {
       pro = buildMockScanPro(asin, request.cost);
     }
   } catch (err) {
-    console.error("[scan] fallback:", err);
+    console.error("[scan] fallback triggered:", err);
 
     base = {
       asin,
@@ -134,6 +159,16 @@ export async function runScan({
     tier,
     verdict: base.verdict,
   }).catch(() => {});
+
+  console.log("====================================");
+  console.log("[runScan DEBUG FINAL RESULT]", {
+    asin,
+    tier,
+    isMock: mock,
+    isPro,
+    verdict: base.verdict,
+  });
+  console.log("====================================");
 
   return {
     result: isPro && pro ? pro : base,
