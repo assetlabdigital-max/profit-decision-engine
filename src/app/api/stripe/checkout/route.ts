@@ -3,89 +3,74 @@ import Stripe from "stripe";
 
 export const runtime = "nodejs";
 
-// Stripe client
+// Stripe client (singleton)
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 });
 
 export async function POST(req: Request) {
-  console.log("====================================");
-  console.log("=== STRIPE CHECKOUT ROUTE HIT ===");
-  console.log("====================================");
+  console.log("=== STRIPE CHECKOUT START ===");
 
   try {
+    // 요청 body 안전 처리
     const body = await req.json().catch(() => ({}));
-
     const email = body?.email;
 
-    // 🔍 DEBUG LOGS
-    console.log("[CHECKOUT DEBUG] email =", email);
-    console.log("[CHECKOUT DEBUG] PRICE_ID =", process.env.STRIPE_PRICE_ID);
-    console.log("[CHECKOUT DEBUG] APP_URL =", process.env.NEXT_PUBLIC_APP_URL);
+    // ENV 검증 (fail-fast)
+    const secretKey = process.env.STRIPE_SECRET_KEY;
+    const priceId = process.env.STRIPE_PRICE_ID;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
-    // 🔐 ENV CHECK (필수)
-    if (!process.env.STRIPE_SECRET_KEY) {
-      console.error("[STRIPE ERROR] Missing STRIPE_SECRET_KEY");
-
+    if (!secretKey) {
+      console.error("[STRIPE] Missing STRIPE_SECRET_KEY");
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Missing STRIPE_SECRET_KEY",
-          code: "STRIPE_SECRET_MISSING",
-        },
+        { ok: false, error: "Missing STRIPE_SECRET_KEY" },
         { status: 500 }
       );
     }
 
-    if (!process.env.STRIPE_PRICE_ID) {
-      console.error("[STRIPE ERROR] Missing STRIPE_PRICE_ID");
-
+    if (!priceId) {
+      console.error("[STRIPE] Missing STRIPE_PRICE_ID");
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Missing STRIPE_PRICE_ID",
-          code: "STRIPE_PRICE_MISSING",
-        },
+        { ok: false, error: "Missing STRIPE_PRICE_ID" },
         { status: 500 }
       );
     }
 
-    if (!process.env.NEXT_PUBLIC_APP_URL) {
-      console.error("[STRIPE ERROR] Missing NEXT_PUBLIC_APP_URL");
-
+    if (!appUrl) {
+      console.error("[STRIPE] Missing NEXT_PUBLIC_APP_URL");
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Missing NEXT_PUBLIC_APP_URL",
-          code: "APP_URL_MISSING",
-        },
+        { ok: false, error: "Missing NEXT_PUBLIC_APP_URL" },
         { status: 500 }
       );
     }
 
-    // 💳 CREATE CHECKOUT SESSION
+    console.log("[STRIPE] email =", email);
+    console.log("[STRIPE] priceId =", priceId);
+
+    // Checkout session 생성
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "subscription",
 
       line_items: [
         {
-          price: process.env.STRIPE_PRICE_ID,
+          price: priceId,
           quantity: 1,
         },
       ],
 
-      customer_email: email || undefined,
+      success_url: `${appUrl}/success`,
+      cancel_url: `${appUrl}/cancel`,
 
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/cancel`,
+      customer_email: email || undefined,
 
       metadata: {
         product: "profit-decision-engine-pro",
       },
     });
 
-    console.log("[STRIPE CHECKOUT SUCCESS] session =", session.id);
+    console.log("[STRIPE] session created:", session.id);
 
     return NextResponse.json({
       ok: true,
@@ -93,21 +78,13 @@ export async function POST(req: Request) {
       sessionId: session.id,
     });
   } catch (err: any) {
-    console.log("====================================");
-    console.log("=== STRIPE FULL ERROR ===");
-    console.log("====================================");
-
+    console.error("=== STRIPE ERROR ===");
     console.error(err);
-    console.error("message =", err?.message);
-    console.error("type =", err?.type);
-    console.error("code =", err?.code);
-    console.error("statusCode =", err?.statusCode);
 
     return NextResponse.json(
       {
         ok: false,
         error: "checkout_failed",
-        code: "STRIPE_CHECKOUT_ERROR",
         message: err?.message ?? "unknown error",
       },
       { status: 500 }
