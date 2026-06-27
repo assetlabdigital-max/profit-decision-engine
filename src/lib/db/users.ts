@@ -148,3 +148,27 @@ export async function recordScan(params: {
     mock: !result.ok,
   };
 }
+
+export async function upgradeUserToPro(params: {
+  email: string;
+  stripeCustomerId: string;
+  stripeSubscriptionId: string | null;
+}) {
+  const result = await safeQuery<any>(
+    `update users
+     set tier = 'pro',
+         stripe_customer_id = $2,
+         stripe_subscription_id = $3,
+         stripe_subscription_status = 'active',
+         updated_at = now()
+     where email = $1
+     returning *`,
+    [params.email, params.stripeCustomerId, params.stripeSubscriptionId]
+  );
+
+  if (result.ok && result.rows?.[0]) {
+    return { ok: true, user: rowToUser(result.rows[0]) };
+  }
+
+  return { ok: false };
+}

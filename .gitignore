@@ -8,3 +8,5 @@ npm-debug.log*
 
 .vercel
 .env*
+
+/src/generated/prisma

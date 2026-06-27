@@ -1,3 +1,4 @@
+import UpgradeButton from "@/app/components/UpgradeButton";
 import { auth } from "@/auth/auth";
 import { resolveTier } from "@/lib/scan/resolve-tier";
 import { TiktokTrendingPanel } from "@/app/dashboard/tiktok-trending-panel";
@@ -16,13 +17,32 @@ export default async function DashboardPage() {
       </p>
 
       {tier === "free" ? (
-        <p>
-          You're on the Free plan. <a href="/pricing">Upgrade to Pro</a> for full profit, fee, and
-          competition breakdowns.
-        </p>
-      ) : (
-        <p>You're on Pro. Manage billing from the pricing page.</p>
-      )}
+  <>
+    <p>
+      You're on the Free plan.
+    </p>
+
+    <UpgradeButton email={session?.user?.email ?? ""} />
+
+    <p style={{ marginTop: 20 }}>
+      Pro unlocks:
+    </p>
+
+    <ul>
+      <li>✔ Profit calculation</li>
+      <li>✔ Amazon fee breakdown</li>
+      <li>✔ Competition score</li>
+      <li>✔ AI sourcing recommendation</li>
+      <li>✔ Unlimited scans</li>
+    </ul>
+  </>
+) : (
+  <>
+    <p style={{ color: "green" }}>
+      ✅ You're on Pro.
+    </p>
+  </>
+)}
 
       <h2>Run a scan</h2>
       <p>POST an ASIN to <code>/api/scan</code> to test the decision engine.</p>
