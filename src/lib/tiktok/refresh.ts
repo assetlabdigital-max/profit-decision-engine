@@ -17,18 +17,35 @@ import { normalizeTrendingHashtagItem, normalizeTiktokVideoItem } from "@/lib/ti
 import { replaceTrendingHashtagsCache, replaceTiktokVideosCache, logRefreshAttempt } from "@/lib/tiktok/cache";
 import type { RefreshResult, TiktokQueryType } from "@/types";
 
+// ===============================
+// TRENDING REFRESH
+// ===============================
+
 export async function refreshTrendingHashtags(params: {
   triggeredBy: string | null;
   industryCategory?: string;
   limit?: number;
 }): Promise<RefreshResult> {
+  console.log("[REFRESH START trending]");
+
   const { apify } = getRuntimeConfig();
   const limit = params.limit ?? 20;
+
+  console.log("[APIFY CONFIG trending]", {
+    enabled: apify.enabled,
+    actorId: apify.tiktokTrendingActorId,
+  });
 
   const run = await runApifyActor(apify.tiktokTrendingActorId, {
     maxItems: limit,
     ...(params.industryCategory ? { industryCategory: params.industryCategory } : {}),
   });
+
+  console.log("[APIFY RAW RESULT trending]", run);
+
+  if (!run.ok) {
+    console.error("❌ APIFY FAILED trending:", { error: run.error, enabled: apify.enabled });
+  }
 
   let result: RefreshResult;
 
@@ -36,24 +53,39 @@ export async function refreshTrendingHashtags(params: {
     result = { status: "mock_fallback", itemsFetched: 0, errorMessage: run.error };
   } else {
     try {
+      console.log("[NORMALIZE START trending] count =", run.items?.length);
       const normalized = run.items.map((item, idx) => normalizeTrendingHashtagItem(item, idx + 1));
+      console.log("[NORMALIZED trending]", normalized.length);
+
       const writeResult = await replaceTrendingHashtagsCache(normalized);
+
+      if (!writeResult.ok) {
+        console.error("❌ DB INSERT FAILED trending:", writeResult);
+      }
+
       result = writeResult.ok
         ? { status: "success", itemsFetched: normalized.length }
         : { status: "failed", itemsFetched: 0, errorMessage: "Cache write failed" };
     } catch (err) {
-      console.error("[tiktok/refresh] failed to normalize/cache trending hashtags:", err);
+      console.error("❌ NORMALIZATION ERROR trending:", err);
       result = {
         status: "failed",
         itemsFetched: 0,
-        errorMessage: err instanceof Error ? err.message : "Unknown normalization error",
+        errorMessage: err instanceof Error ? err.message : "Unknown error",
       };
     }
   }
 
   await logRefreshAttempt({ refreshType: "trending", triggeredBy: params.triggeredBy, result });
+
+  console.log("🔥 FINAL RESULT trending:", JSON.stringify(result, null, 2));
+
   return result;
 }
+
+// ===============================
+// SEARCH REFRESH
+// ===============================
 
 export async function refreshTiktokSearch(params: {
   query: string;
@@ -61,6 +93,8 @@ export async function refreshTiktokSearch(params: {
   triggeredBy: string | null;
   limit?: number;
 }): Promise<RefreshResult> {
+  console.log("[REFRESH START search]", params);
+
   const { apify } = getRuntimeConfig();
   const limit = params.limit ?? 20;
 
@@ -69,7 +103,15 @@ export async function refreshTiktokSearch(params: {
       ? { hashtags: [params.query.replace(/^#/, "")], resultsPerPage: limit }
       : { searchQueries: [params.query], resultsPerPage: limit };
 
+  console.log("[APIFY INPUT search]", input);
+
   const run = await runApifyActor(apify.tiktokSearchActorId, input);
+
+  console.log("[APIFY RAW RESULT search]", run);
+
+  if (!run.ok) {
+    console.error("❌ APIFY FAILED search:", run.error);
+  }
 
   let result: RefreshResult;
 
@@ -77,17 +119,25 @@ export async function refreshTiktokSearch(params: {
     result = { status: "mock_fallback", itemsFetched: 0, errorMessage: run.error };
   } else {
     try {
+      console.log("[NORMALIZE START search] count =", run.items?.length);
       const normalized = run.items.map((item) => normalizeTiktokVideoItem(item));
+      console.log("[NORMALIZED search]", normalized.length);
+
       const writeResult = await replaceTiktokVideosCache(params.query, params.queryType, normalized);
+
+      if (!writeResult.ok) {
+        console.error("❌ DB INSERT FAILED search:", writeResult);
+      }
+
       result = writeResult.ok
         ? { status: "success", itemsFetched: normalized.length }
         : { status: "failed", itemsFetched: 0, errorMessage: "Cache write failed" };
     } catch (err) {
-      console.error("[tiktok/refresh] failed to normalize/cache search results:", err);
+      console.error("❌ NORMALIZATION ERROR search:", err);
       result = {
         status: "failed",
         itemsFetched: 0,
-        errorMessage: err instanceof Error ? err.message : "Unknown normalization error",
+        errorMessage: err instanceof Error ? err.message : "Unknown error",
       };
     }
   }
@@ -98,5 +148,8 @@ export async function refreshTiktokSearch(params: {
     triggeredBy: params.triggeredBy,
     result,
   });
+
+  console.log("🔥 FINAL RESULT search:", JSON.stringify(result, null, 2));
+
   return result;
 }

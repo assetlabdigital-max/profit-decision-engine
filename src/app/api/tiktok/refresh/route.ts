@@ -27,7 +27,7 @@ import type { ApiResponse, RefreshResult } from "@/types";
 // Minimum time between refreshes for the SAME target. This is the
 // primary cost-control lever now that refresh is manual rather than a
 // cron — without it, a few fast clicks could burn through Apify credits
-// quickly. Tune via env if needed.
+// quickly. Tune here if needed.
 const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 
 const bodySchema = z.discriminatedUnion("type", [
@@ -40,6 +40,8 @@ const bodySchema = z.discriminatedUnion("type", [
 ]);
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  console.log("🔥 TikTok refresh API START");
+
   try {
     const session = await auth().catch(() => null);
     const email = session?.user?.email;
@@ -62,6 +64,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json(body, { status: 400 });
     }
 
+    console.log("BODY =", payload);
+
     const parsed = bodySchema.safeParse(payload);
     if (!parsed.success) {
       const body: ApiResponse<never> = { ok: false, error: "Invalid request shape", code: "INVALID_INPUT" };
@@ -69,6 +73,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     const input = parsed.data;
+    console.log("PARSED =", input);
+
     const refreshType = input.type;
     const queryForCooldown = refreshType === "search" ? input.query : undefined;
 
@@ -100,6 +106,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       });
     }
 
+    console.log("🔥 FINAL API RESULT:", result);
+
     // Note: result.status === "mock_fallback" or "failed" still returns
     // HTTP 200 — the REQUEST succeeded (we handled it correctly); it's
     // the underlying Apify call that didn't produce fresh data. The
@@ -111,7 +119,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     };
     return NextResponse.json(body, { status: 200 });
   } catch (err) {
-    console.error("[api/tiktok/refresh] unhandled error:", err);
+    console.error("[REFRESH API ERROR]", err);
     const body: ApiResponse<never> = {
       ok: false,
       error: "Refresh temporarily unavailable. Please try again shortly.",

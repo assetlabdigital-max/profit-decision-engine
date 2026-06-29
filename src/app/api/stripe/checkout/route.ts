@@ -1,56 +1,162 @@
-import { NextResponse } from "next/server";
-import Stripe from "stripe";
-
 export const runtime = "nodejs";
 
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-const priceIdPro = process.env.STRIPE_PRICE_ID_PRO;
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3008";
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { auth } from "@/auth/auth";
+import { getStripeClient } from "@/lib/stripe/client";
+import { isStripeEnabled, getRuntimeConfig } from "@/lib/runtime-config";
+import { getUserByEmail } from "@/lib/db/users";
+import type { ApiResponse } from "@/types";
 
-const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, {
-      apiVersion: "2024-06-20",
-    })
-  : null;
+const bodySchema = z.object({
+  plan: z.enum(["monthly", "yearly"]).default("monthly"),
+});
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    if (!stripe) {
-      return NextResponse.json(
-        { error: "STRIPE_SECRET_KEY is missing." },
-        { status: 500 }
-      );
+    // 🔐 AUTH CHECK
+    const session = await auth().catch(() => null);
+    const email = session?.user?.email;
+
+    if (!email) {
+      const body: ApiResponse<never> = {
+        ok: false,
+        error: "You must be signed in to upgrade.",
+        code: "UNAUTHENTICATED",
+      };
+      return NextResponse.json(body, { status: 401 });
     }
 
-    if (!priceIdPro) {
-      return NextResponse.json(
-        { error: "STRIPE_PRICE_ID_PRO is missing." },
-        { status: 500 }
-      );
+    // 📦 SAFE PAYLOAD PARSE
+    let payload: unknown = {};
+    try {
+      payload = await req.json();
+    } catch {
+      payload = {};
     }
 
-    const { email } = await req.json();
+    const parsed = bodySchema.safeParse(payload);
 
-    const session = await stripe.checkout.sessions.create({
+    if (!parsed.success) {
+      const body: ApiResponse<never> = {
+        ok: false,
+        error: "Invalid request body",
+        code: "INVALID_INPUT",
+      };
+      return NextResponse.json(body, { status: 400 });
+    }
+
+    const { plan } = parsed.data;
+
+    const { appUrl, stripe } = getRuntimeConfig();
+
+    // 🔥 MOCK MODE (Stripe disabled)
+    if (!isStripeEnabled()) {
+      console.warn("[stripe/checkout] running in MOCK mode");
+
+      const body: ApiResponse<{ url: string }> = {
+        ok: true,
+        data: {
+          url: `${appUrl}/dashboard?mock_checkout=success&plan=${plan}`,
+        },
+        mock: true,
+      };
+
+      return NextResponse.json(body, { status: 200 });
+    }
+
+    const client = getStripeClient();
+
+    // 🔥 NO STRIPE CLIENT
+    if (!client) {
+      console.warn("[stripe/checkout] missing Stripe client");
+
+      const body: ApiResponse<{ url: string }> = {
+        ok: true,
+        data: {
+          url: `${appUrl}/dashboard?mock_checkout=success&plan=${plan}`,
+        },
+        mock: true,
+      };
+
+      return NextResponse.json(body, { status: 200 });
+    }
+
+    // 💳 PRICE RESOLUTION
+    const priceId =
+      plan === "yearly" ? stripe.priceIdYearly : stripe.priceIdMonthly;
+
+    if (!priceId) {
+      console.error("[stripe/checkout] missing priceId:", plan);
+
+      const body: ApiResponse<{ url: string }> = {
+        ok: true,
+        data: {
+          url: `${appUrl}/dashboard?mock_checkout=missing_price`,
+        },
+        mock: true,
+      };
+
+      return NextResponse.json(body, { status: 200 });
+    }
+
+    // 👤 USER LOOKUP
+    const { user } = await getUserByEmail(email);
+
+    // 🚀 CREATE CHECKOUT SESSION
+    const checkoutSession = await client.checkout.sessions.create({
       mode: "subscription",
-      payment_method_types: ["card"],
+
+      customer_email: user.stripeCustomerId ? undefined : email,
+      customer: user.stripeCustomerId ?? undefined,
+
       line_items: [
         {
-          price: priceIdPro,
+          price: priceId,
           quantity: 1,
         },
       ],
-      customer_email: email || undefined,
-      success_url: `${appUrl}/dashboard?success=1`,
-      cancel_url: `${appUrl}/dashboard?canceled=1`,
+
+      success_url: `${appUrl}/dashboard?checkout=success`,
+      cancel_url: `${appUrl}/pricing?checkout=cancelled`,
+
+      client_reference_id: email,
+      metadata: {
+        email,
+        plan,
+      },
     });
 
-    return NextResponse.json({ url: session.url });
+    // 🚨 URL SAFETY CHECK
+    if (!checkoutSession?.url) {
+      console.error("[stripe/checkout] missing checkout URL");
+
+      throw new Error("Stripe did not return checkout URL");
+    }
+
+    // ✅ SUCCESS RESPONSE
+    const body: ApiResponse<{ url: string }> = {
+      ok: true,
+      data: {
+        url: checkoutSession.url,
+      },
+      mock: false,
+    };
+
+    return NextResponse.json(body, { status: 200 });
   } catch (err) {
-    console.error("[stripe checkout error]", err);
-    return NextResponse.json(
-      { error: "Checkout failed" },
-      { status: 500 }
-    );
+    console.error("[stripe/checkout] fatal error fallback:", err);
+
+    const { appUrl } = getRuntimeConfig();
+
+    const body: ApiResponse<{ url: string }> = {
+      ok: true,
+      data: {
+        url: `${appUrl}/dashboard?mock_checkout=fallback`,
+      },
+      mock: true,
+    };
+
+    return NextResponse.json(body, { status: 200 });
   }
 }

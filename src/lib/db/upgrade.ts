@@ -33,9 +33,22 @@ export async function upgradeUserToPro(params: {
     ]
   );
 
+  // IMPORTANT: safeQuery returns a discriminated union —
+  // { ok: true; rows: T[] } | { ok: false; error: string }.
+  // `result.rows` only exists on the `ok: true` branch, so we must
+  // check `result.ok` FIRST. TypeScript then narrows the type inside
+  // this block and `result.rows` becomes safely accessible.
+  if (!result.ok) {
+    return {
+      ok: false,
+      mock: true,
+      row: null,
+    };
+  }
+
   return {
-    ok: result.ok && result.rows?.length > 0,
-    mock: !result.ok,
-    row: result.rows?.[0] ?? null,
+    ok: result.rows.length > 0,
+    mock: false,
+    row: result.rows[0] ?? null,
   };
 }

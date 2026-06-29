@@ -7,6 +7,15 @@
  * Read functions ALWAYS return something usable: real cached rows if
  * present, otherwise deterministic mock data — never an error, never an
  * empty array that the caller has to special-case.
+ *
+ * This file must export exactly these 6 functions for the pipeline to
+ * compile:
+ *   - getCachedTrendingHashtags    (used by GET /api/tiktok/trending)
+ *   - replaceTrendingHashtagsCache (used by refresh.ts)
+ *   - getCachedTiktokVideos        (used by GET /api/tiktok/search)
+ *   - replaceTiktokVideosCache     (used by refresh.ts)
+ *   - logRefreshAttempt            (used by refresh.ts)
+ *   - getLastRefreshAttempt        (used by route.ts for cooldown check)
  */
 
 import { safeQuery } from "@/lib/db/safe-query";
