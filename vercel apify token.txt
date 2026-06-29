@@ -1,3 +1,0 @@
-vcp_7Pj9qF2O1xk791OI9kaffyopptKRN5wnZ0n3HZ07HqPKZuKZ613hXP9Y   Vercel 인증토큰
-
-apify_api_YP3i1dXD7XDzMZJipJA8ebpXfQtRih1T2MqS   apify 토큰
