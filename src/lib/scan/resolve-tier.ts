@@ -2,7 +2,7 @@
  * src/lib/scan/resolve-tier.ts
  *
  * DEBUG VERSION
- * Tier resolution logging enabled
+ * Tier resolution logging enabled (STEP 7)
  */
 
 import { auth } from "@/auth/auth";
@@ -20,19 +20,28 @@ export async function resolveTier(): Promise<ResolvedTier> {
   try {
     const session = await auth();
 
+    // 🔥 DEBUG TRACE 1
     console.log("================================");
-    console.log("[resolveTier] session =", session);
+    console.log("[resolveTier DEBUG] session =", session);
     console.log("================================");
 
     const email = session?.user?.email ?? null;
 
-    console.log("[resolveTier] email =", email);
+    // 🔥 DEBUG TRACE 2
+    console.log("[resolveTier DEBUG] email =", email);
 
     if (!email) {
-      console.log("[resolveTier] anonymous user -> FREE");
+      const tier: Tier = "free";
+
+      console.log("[resolveTier DEBUG] anonymous user -> FREE");
+
+      // 🔥 FINAL TIER TRACE (REQUESTED FIX)
+      console.log("================================");
+      console.log("[resolveTier DEBUG FINAL tier =", tier);
+      console.log("================================");
 
       return {
-        tier: "free",
+        tier,
         userId: null,
         email: null,
         usedFallback: false,
@@ -42,28 +51,44 @@ export async function resolveTier(): Promise<ResolvedTier> {
     const sessionTier =
       ((session?.user as any)?.tier as Tier) ?? "free";
 
-    console.log("[resolveTier] session tier =", sessionTier);
+    // 🔥 DEBUG TRACE 3
+    console.log("[resolveTier DEBUG] sessionTier =", sessionTier);
 
     try {
       const { user, mock } = await getUserByEmail(email);
 
-      console.log("[resolveTier] DB user =", user);
-      console.log("[resolveTier] DB tier =", user.tier);
+      // 🔥 DB TRACE
+      console.log("[resolveTier DEBUG] DB user =", user);
+      console.log("[resolveTier DEBUG] DB tier =", user.tier);
+
+      const tier: Tier = user.tier;
+
+      // 🔥 FINAL TIER TRACE (DB PATH)
+      console.log("================================");
+      console.log("[resolveTier DEBUG FINAL tier =", tier);
+      console.log("================================");
 
       return {
-        tier: user.tier,
+        tier,
         userId: user.id,
         email,
         usedFallback: mock,
       };
     } catch (dbErr) {
       console.error(
-        "[resolveTier] DB lookup failed, using JWT tier:",
+        "[resolveTier DEBUG] DB lookup failed, fallback to session tier:",
         dbErr
       );
 
+      const tier: Tier = sessionTier;
+
+      // 🔥 FINAL TIER TRACE (SESSION FALLBACK PATH)
+      console.log("================================");
+      console.log("[resolveTier DEBUG FINAL tier =", tier);
+      console.log("================================");
+
       return {
-        tier: sessionTier,
+        tier,
         userId: null,
         email,
         usedFallback: true,
@@ -71,12 +96,19 @@ export async function resolveTier(): Promise<ResolvedTier> {
     }
   } catch (err) {
     console.error(
-      "[resolveTier] auth() failed, defaulting FREE:",
+      "[resolveTier DEBUG] auth() failed -> FREE fallback:",
       err
     );
 
+    const tier: Tier = "free";
+
+    // 🔥 FINAL TIER TRACE (AUTH FAILURE PATH)
+    console.log("================================");
+    console.log("[resolveTier DEBUG FINAL tier =", tier);
+    console.log("================================");
+
     return {
-      tier: "free",
+      tier,
       userId: null,
       email: null,
       usedFallback: true,

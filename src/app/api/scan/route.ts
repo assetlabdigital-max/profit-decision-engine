@@ -1,159 +1,68 @@
-import { NextResponse } from "next/server";
-import { isApifyEnabled } from "@/lib/runtime-config";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-/**
- * 🔥 REAL PROFIT DECISION ENGINE
- */
-export async function POST(req: Request) {
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { resolveTier } from "@/lib/scan/resolve-tier";
+import { runScan } from "@/lib/scan/run-scan";
+import type { ApiResponse, ScanResult } from "@/types";
+
+const scanRequestSchema = z.object({
+  asin: z.string().trim().min(1).max(32).optional(),
+  productUrl: z.string().trim().url().optional(),
+  cost: z.number().positive().max(100000).optional(),
+});
+
+function jsonError(message: string, code: string, status: number): NextResponse {
+  const body: ApiResponse<never> = { ok: false, error: message, code, mock: true };
+  return NextResponse.json(body, { status });
+}
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    const { asin } = await req.json();
-
-    if (!asin) {
-      return NextResponse.json(
-        { error: "Missing ASIN" },
-        { status: 400 }
-      );
+    let payload: unknown;
+    try {
+      payload = await req.json();
+    } catch {
+      payload = {};
     }
 
-    // -----------------------------------
-    // 1. AMAZON PRODUCT (mock for now)
-    // -----------------------------------
-    const product = await getAmazonProduct(asin);
+    const parsed = scanRequestSchema.safeParse(payload);
+    if (!parsed.success) {
+      return jsonError("Invalid request body", "INVALID_INPUT", 400);
+    }
 
-    // -----------------------------------
-    // 2. TIKTOK TREND DATA
-    // -----------------------------------
-    const trend = await getTikTokTrend(product.keyword);
+    const { tier, userId, usedFallback } = await resolveTier();
 
-    // -----------------------------------
-    // 3. COMPETITION SCORE
-    // -----------------------------------
-    const competition = estimateCompetition(product.category);
-
-    // -----------------------------------
-    // 4. PROFIT CALCULATION
-    // -----------------------------------
-    const fees = calculateAmazonFees(product.price);
-
-    const profit =
-      product.price -
-      fees.total -
-      product.cost;
-
-    const score = calculateScore({
-      profit,
-      trend,
-      competition,
+    const { result, mock } = await runScan({
+      request: parsed.data,
+      tier,
+      userId,
     });
 
-    // -----------------------------------
-    // 5. DECISION ENGINE
-    // -----------------------------------
-    const decision = getDecision(score);
+    const body: ApiResponse<ScanResult> = {
+      ok: true,
+      data: result,
+      mock: mock || usedFallback,
+    };
 
-    return NextResponse.json({
-      asin,
-      product,
-      trend,
-      competition,
-      fees,
-      profit: Number(profit.toFixed(2)),
-      score,
-      decision,
-    });
+    return NextResponse.json(body, { status: 200 });
   } catch (err) {
-    console.error("[scan] error:", err);
-    return NextResponse.json(
-      { error: "Scan failed" },
-      { status: 500 }
-    );
-  }
-}
+    console.error("[api/scan] unhandled error, returning safe fallback:", err);
 
-/* ---------------------------
-   AMAZON (mock for now)
-----------------------------*/
-async function getAmazonProduct(asin: string) {
-  return {
-    asin,
-    title: "Sample Product",
-    price: 29.99,
-    cost: 10.0,
-    category: "Home",
-    keyword: "home gadget",
-  };
-}
-
-/* ---------------------------
-   TIKTOK TREND
-----------------------------*/
-async function getTikTokTrend(keyword: string) {
-  const isLive = isApifyEnabled();
-
-  if (!isLive) {
-    return {
-      views: 120000000,
-      growth: 0.18,
+    const body: ApiResponse<never> = {
+      ok: false,
+      error: "Scan temporarily unavailable. Please try again shortly.",
+      code: "SCAN_FALLBACK",
       mock: true,
     };
+    return NextResponse.json(body, { status: 200 });
   }
-
-  // 👉 Apify 연결 자리 (나중에 실제 actor 붙임)
-  return {
-    views: 250000000,
-    growth: 0.42,
-    mock: false,
-  };
 }
 
-/* ---------------------------
-   COMPETITION
-----------------------------*/
-function estimateCompetition(category: string) {
-  const map: Record<string, number> = {
-    Home: 0.6,
-    Beauty: 0.8,
-    Sports: 0.5,
-    Tech: 0.9,
-  };
-
-  return map[category] ?? 0.7;
-}
-
-/* ---------------------------
-   AMAZON FEES (simplified)
-----------------------------*/
-function calculateAmazonFees(price: number) {
-  return {
-    referral: price * 0.15,
-    fulfillment: 4.5,
-    total: price * 0.15 + 4.5,
-  };
-}
-
-/* ---------------------------
-   SCORING ENGINE
-----------------------------*/
-function calculateScore({
-  profit,
-  trend,
-  competition,
-}: any) {
-  const trendScore = trend.views / 1_000_000;
-
-  return (
-    profit * 2 +
-    trendScore * 0.3 -
-    competition * 10
-  );
-}
-
-/* ---------------------------
-   DECISION LOGIC
-----------------------------*/
-function getDecision(score: number) {
-  if (score > 20) return "STRONG BUY";
-  if (score > 10) return "TEST PRODUCT";
-  if (score > 0) return "WEAK OPPORTUNITY";
-  return "AVOID";
+export async function GET(): Promise<NextResponse> {
+  return NextResponse.json({
+    ok: true,
+    message: "POST { asin?: string, productUrl?: string, cost?: number } to this endpoint.",
+  });
 }
