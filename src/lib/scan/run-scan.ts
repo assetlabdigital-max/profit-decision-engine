@@ -86,13 +86,17 @@ export async function runScan({ request, tier, userId }: RunScanParams): Promise
           generatedAt: new Date().toISOString(),
         };
 
-        if (tier === "pro" && fees) {
+        if (tier === "pro") {
           pro = {
             ...base,
-            estimatedFees: {
+            estimatedFees: fees ? {
               referralFee: fees.referralFee,
               fbaFee: fees.fbaFee,
               totalFees: fees.totalFees,
+            } : {
+              referralFee: 0,
+              fbaFee: 0,
+              totalFees: totalFees,
             },
             profit: {
               unitCost: cost,
