@@ -43,6 +43,8 @@ async function fetchPriceFromApify(asin: string): Promise<{
 
     const data = await res.json();
     const item = Array.isArray(data) ? data[0] : null;
+    console.log("[amazon/apify] RAW item keys:", item ? Object.keys(item) : "null");
+    console.log("[amazon/apify] RAW item sample:", JSON.stringify(item, null, 2).slice(0, 1000));
     if (!item) return null;
 
     console.log(`[amazon/apify] price=${item.price}, rating=${item.stars}, reviews=${item.reviewsCount}`);
