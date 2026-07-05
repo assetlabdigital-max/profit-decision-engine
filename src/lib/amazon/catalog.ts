@@ -46,7 +46,13 @@ async function fetchPriceFromApify(asin: string): Promise<{
     const item = Array.isArray(data) ? data[0] : null;
     if (!item) return null;
 
-    const price = Number(item.price ?? item.currentPrice ?? 0);
+    const price = Number(
+  item.price ??
+  item.currentPrice ??
+  item.wasPrice ??
+  item.priceRange?.min ??
+  0
+);
     const rating = Number(item.reviewRating ?? item.stars ?? item.rating ?? 0);
     const reviews = Number(item.reviewCount ?? item.reviewsCount ?? item.reviews ?? 0);
     const category = Array.isArray(item.categories) ? item.categories[0] : null;
