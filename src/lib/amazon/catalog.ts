@@ -11,6 +11,50 @@ export interface AmazonProduct {
   isMock: boolean;
 }
 
+async function fetchPriceFromApify(asin: string): Promise<{
+  price: number;
+  rating: number;
+  reviews: number;
+} | null> {
+  const token = process.env.APIFY_API_TOKEN;
+  if (!token) return null;
+
+  try {
+    const res = await fetch(
+      `https://api.apify.com/v2/acts/junglee~amazon-product-scraper/run-sync-get-dataset-items?token=${token}&timeout=30`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asins: [asin],
+          countryCode: "US",
+          maxItems: 1,
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      console.warn(`[amazon/apify] HTTP ${res.status} for ${asin}`);
+      return null;
+    }
+
+    const data = await res.json();
+    const item = Array.isArray(data) ? data[0] : null;
+    if (!item) return null;
+
+    console.log(`[amazon/apify] price=${item.price}, rating=${item.stars}, reviews=${item.reviewsCount}`);
+
+    return {
+      price: Number(item.price ?? item.currentPrice ?? 0),
+      rating: Number(item.stars ?? item.rating ?? 0),
+      reviews: Number(item.reviewsCount ?? item.reviews ?? 0),
+    };
+  } catch (err) {
+    console.error(`[amazon/apify] failed for ${asin}:`, err);
+    return null;
+  }
+}
+
 export async function getProductByAsin(asin: string): Promise<AmazonProduct | null> {
   if (!isAmazonEnabled()) {
     console.log("[amazon/catalog] SP-API not configured, returning null");
@@ -25,47 +69,29 @@ export async function getProductByAsin(asin: string): Promise<AmazonProduct | nu
     );
 
     const summary = data?.summaries?.[0];
-    console.log("[amazon/catalog] RAW DATA:", JSON.stringify(data, null, 2).slice(0, 3000));
     if (!summary) return null;
 
-    const attributes = data?.attributes;
+    // SP-API로 제목/카테고리 가져오기
+    const title = summary.itemName ?? "Unknown Product";
+    const category = summary.productType ?? "Unknown";
+    const brand = summary.brand ?? null;
 
-    // 1차: attributes에서 가격 시도
-    let price = Number(
-      attributes?.list_price?.[0]?.value?.amount ??
-      attributes?.purchasable_offer?.[0]?.our_price?.[0]?.schedule?.[0]?.value_with_tax ??
-      0
-    );
+    // Apify로 가격/평점/리뷰 가져오기
+    const apifyData = await fetchPriceFromApify(asin);
+    const price = apifyData?.price ?? 0;
+    const rating = apifyData?.rating ?? 0;
+    const reviews = apifyData?.reviews ?? 0;
 
-    // 2차: Pricing API로 fallback
-    if (!price) {
-      try {
-        const pricingData = await spApiCall<any>(
-          `/products/pricing/v0/price?MarketplaceId=${marketplaceId}&Asins=${asin}&ItemType=Asin`
-        );
-        const offer = pricingData?.payload?.[0]?.Product?.Offers?.[0];
-        price = Number(
-          offer?.BuyingPrice?.ListingPrice?.Amount ??
-          offer?.RegularPrice?.Amount ??
-          0
-        );
-        console.log(`[amazon/catalog] pricing API fallback price for ${asin}: ${price}`);
-      } catch (e) {
-        console.warn(`[amazon/catalog] pricing API fallback failed for ${asin}`);
-      }
-    }
-
-    const rating = Number(attributes?.average_customer_reviews?.[0]?.rating ?? 0);
-    const reviews = Number(attributes?.average_customer_reviews?.[0]?.count ?? 0);
+    console.log(`[amazon/catalog] ${asin} — title: ${title}, price: ${price}, rating: ${rating}, reviews: ${reviews}`);
 
     return {
       asin,
-      title: summary.itemName ?? "Unknown Product",
+      title,
       price,
       rating,
       reviews,
-      category: summary.productType ?? "Unknown",
-      brand: summary.brand ?? null,
+      category,
+      brand,
       isMock: false,
     };
   } catch (err) {
