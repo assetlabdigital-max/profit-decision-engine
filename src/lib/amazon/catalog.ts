@@ -25,6 +25,7 @@ export async function getProductByAsin(asin: string): Promise<AmazonProduct | nu
     );
 
     const summary = data?.summaries?.[0];
+    console.log("[amazon/catalog] RAW DATA:", JSON.stringify(data, null, 2).slice(0, 3000));
     if (!summary) return null;
 
     const attributes = data?.attributes;
