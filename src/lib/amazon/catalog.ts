@@ -25,7 +25,14 @@ async function fetchPriceFromApify(asin: string): Promise<{
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ asin }),
+       body: JSON.stringify({
+           startUrls: [{
+              url: `https://www.amazon.com/dp/${asin}`,
+              method: "GET"
+           }],
+           maxItems: 1,
+           proxyConfiguration: { useApifyProxy: true },
+       }),
       }
     );
 
