@@ -51,7 +51,12 @@ async function fetchPriceFromApify(asin: string): Promise<{
 
     console.log(`[amazon/apify] price=${price}, rating=${rating}, reviews=${reviews}`);
 
-    return { price, rating, reviews };
+    return { 
+      price, 
+      rating, 
+      reviews,
+      category: Array.isArray(item.categories) ? item.categories[0] : null,
+    };
   } catch (err) {
     console.error(`[amazon/apify] failed for ${asin}:`, err);
     return null;
@@ -76,7 +81,7 @@ export async function getProductByAsin(asin: string): Promise<AmazonProduct | nu
 
     // SP-API로 제목/카테고리 가져오기
     const title = summary.itemName ?? "Unknown Product";
-    const category = summary.productType ?? "Unknown";
+    const category = apifyData?.category ?? summary.productType ?? "Unknown";
     const brand = summary.brand ?? null;
 
     // Apify로 가격/평점/리뷰 가져오기
@@ -107,7 +112,12 @@ export async function getProductFees(asin: string, price: number): Promise<{
   referralFee: number;
   fbaFee: number;
   totalFees: number;
-} | null> {
+async function fetchPriceFromApify(asin: string): Promise<{
+  price: number;
+  rating: number;
+  reviews: number;
+  category: string | null;
+} | null>
   if (!isAmazonEnabled()) return null;
 
   try {
