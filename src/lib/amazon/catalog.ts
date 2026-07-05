@@ -15,6 +15,7 @@ async function fetchPriceFromApify(asin: string): Promise<{
   price: number;
   rating: number;
   reviews: number;
+  category: string | null;
 } | null> {
   const token = process.env.APIFY_API_TOKEN;
   if (!token) return null;
@@ -48,15 +49,11 @@ async function fetchPriceFromApify(asin: string): Promise<{
     const price = Number(item.price ?? item.currentPrice ?? 0);
     const rating = Number(item.reviewRating ?? item.stars ?? item.rating ?? 0);
     const reviews = Number(item.reviewCount ?? item.reviewsCount ?? item.reviews ?? 0);
+    const category = Array.isArray(item.categories) ? item.categories[0] : null;
 
-    console.log(`[amazon/apify] price=${price}, rating=${rating}, reviews=${reviews}`);
+    console.log(`[amazon/apify] price=${price}, rating=${rating}, reviews=${reviews}, category=${category}`);
 
-    return { 
-      price, 
-      rating, 
-      reviews,
-      category: Array.isArray(item.categories) ? item.categories[0] : null,
-    };
+    return { price, rating, reviews, category };
   } catch (err) {
     console.error(`[amazon/apify] failed for ${asin}:`, err);
     return null;
@@ -79,16 +76,14 @@ export async function getProductByAsin(asin: string): Promise<AmazonProduct | nu
     const summary = data?.summaries?.[0];
     if (!summary) return null;
 
-    // SP-API로 제목/카테고리 가져오기
     const title = summary.itemName ?? "Unknown Product";
-    const category = apifyData?.category ?? summary.productType ?? "Unknown";
     const brand = summary.brand ?? null;
 
-    // Apify로 가격/평점/리뷰 가져오기
     const apifyData = await fetchPriceFromApify(asin);
     const price = apifyData?.price ?? 0;
     const rating = apifyData?.rating ?? 0;
     const reviews = apifyData?.reviews ?? 0;
+    const category = apifyData?.category ?? summary.productType ?? "Unknown";
 
     console.log(`[amazon/catalog] ${asin} — title: ${title}, price: ${price}, rating: ${rating}, reviews: ${reviews}`);
 
@@ -112,12 +107,7 @@ export async function getProductFees(asin: string, price: number): Promise<{
   referralFee: number;
   fbaFee: number;
   totalFees: number;
-async function fetchPriceFromApify(asin: string): Promise<{
-  price: number;
-  rating: number;
-  reviews: number;
-  category: string | null;
-} | null>
+} | null> {
   if (!isAmazonEnabled()) return null;
 
   try {
