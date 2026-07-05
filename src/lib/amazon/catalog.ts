@@ -50,9 +50,9 @@ async function fetchPriceFromApify(asin: string): Promise<{
     console.log(`[amazon/apify] price=${item.price}, rating=${item.stars}, reviews=${item.reviewsCount}`);
 
     return {
-      price: Number(item.price ?? item.currentPrice ?? 0),
-      rating: Number(item.stars ?? item.rating ?? 0),
-      reviews: Number(item.reviewsCount ?? item.reviews ?? 0),
+       price: Number(item.price ?? item.currentPrice ?? 0),
+       rating: Number(item.reviewRating ?? item.stars ?? item.rating ?? 0),
+       reviews: Number(item.reviewCount ?? item.reviewsCount ?? item.reviews ?? 0),
     };
   } catch (err) {
     console.error(`[amazon/apify] failed for ${asin}:`, err);
