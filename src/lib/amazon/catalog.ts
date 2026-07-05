@@ -21,15 +21,11 @@ async function fetchPriceFromApify(asin: string): Promise<{
 
   try {
     const res = await fetch(
-      `https://api.apify.com/v2/acts/junglee~amazon-product-scraper/run-sync-get-dataset-items?token=${token}&timeout=30`,
+      `https://api.apify.com/v2/acts/dtrungtin~amazon-scraper/run-sync-get-dataset-items?token=${token}&timeout=30`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          asins: [asin],
-          countryCode: "US",
-          maxItems: 1,
-        }),
+        body: JSON.stringify({ asin }),
       }
     );
 
