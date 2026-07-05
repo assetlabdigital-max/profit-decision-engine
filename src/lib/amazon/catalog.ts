@@ -21,18 +21,18 @@ async function fetchPriceFromApify(asin: string): Promise<{
 
   try {
     const res = await fetch(
-      `https://api.apify.com/v2/acts/dtrungtin~amazon-scraper/run-sync-get-dataset-items?token=${token}&timeout=30`,
+      `https://api.apify.com/v2/acts/dtrungtin~amazon-scraper/run-sync-get-dataset-items?token=${token}&timeout=60`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({
-           startUrls: [{
-              url: `https://www.amazon.com/dp/${asin}`,
-              method: "GET"
-           }],
-           maxItems: 1,
-           proxyConfiguration: { useApifyProxy: true },
-       }),
+        body: JSON.stringify({
+          startUrls: [{
+            url: `https://www.amazon.com/dp/${asin}`,
+            method: "GET"
+          }],
+          maxItems: 1,
+          proxyConfiguration: { useApifyProxy: true },
+        }),
       }
     );
 
@@ -43,17 +43,15 @@ async function fetchPriceFromApify(asin: string): Promise<{
 
     const data = await res.json();
     const item = Array.isArray(data) ? data[0] : null;
-    console.log("[amazon/apify] RAW item keys:", item ? Object.keys(item) : "null");
-    console.log("[amazon/apify] RAW item sample:", JSON.stringify(item, null, 2).slice(0, 1000));
     if (!item) return null;
 
-    console.log(`[amazon/apify] price=${item.price}, rating=${item.stars}, reviews=${item.reviewsCount}`);
+    const price = Number(item.price ?? item.currentPrice ?? 0);
+    const rating = Number(item.reviewRating ?? item.stars ?? item.rating ?? 0);
+    const reviews = Number(item.reviewCount ?? item.reviewsCount ?? item.reviews ?? 0);
 
-    return {
-       price: Number(item.price ?? item.currentPrice ?? 0),
-       rating: Number(item.reviewRating ?? item.stars ?? item.rating ?? 0),
-       reviews: Number(item.reviewCount ?? item.reviewsCount ?? item.reviews ?? 0),
-    };
+    console.log(`[amazon/apify] price=${price}, rating=${rating}, reviews=${reviews}`);
+
+    return { price, rating, reviews };
   } catch (err) {
     console.error(`[amazon/apify] failed for ${asin}:`, err);
     return null;
