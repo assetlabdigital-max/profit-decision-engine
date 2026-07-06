@@ -12,6 +12,8 @@ interface ScanResult {
   reviewCount: number;
   category: string;
   isMock: boolean;
+  eligibility?: "eligible" | "restricted" | "unknown";
+  eligibilityReason?: string | null;
   estimatedFees?: {
     referralFee: number;
     fbaFee: number;
@@ -130,6 +132,8 @@ export function ScanPanel({ tier }: { tier: string }) {
 
       {result && (
         <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 20, marginTop: 16 }}>
+
+          {/* Verdict Badge */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
             <span style={{
               background: VERDICT_COLORS[result.verdict],
@@ -149,15 +153,18 @@ export function ScanPanel({ tier }: { tier: string }) {
             )}
           </div>
 
+          {/* Product Info */}
           <h3 style={{ margin: "0 0 4px", fontSize: 16 }}>{result.title}</h3>
           <p style={{ margin: "0 0 12px", fontSize: 13, color: "#666" }}>
             ASIN: {result.asin} · {result.category}
           </p>
 
+          {/* Verdict Reason */}
           <p style={{ margin: "0 0 16px", fontSize: 14, background: "#f9fafb", padding: 12, borderRadius: 6 }}>
             {result.verdictReason}
           </p>
 
+          {/* Basic Stats */}
           <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 16 }}>
             <div>
               <div style={{ fontSize: 11, color: "#999", textTransform: "uppercase" }}>Price</div>
@@ -173,6 +180,31 @@ export function ScanPanel({ tier }: { tier: string }) {
             </div>
           </div>
 
+          {/* Eligibility */}
+          {result.eligibility && (
+            <div style={{ marginBottom: 16, padding: 12, background: "#f9fafb", borderRadius: 6 }}>
+              <div style={{ fontSize: 11, color: "#999", textTransform: "uppercase", marginBottom: 4 }}>
+                Eligible to Sell
+              </div>
+              <div style={{
+                fontWeight: 600,
+                color: result.eligibility === "eligible" ? "#22c55e"
+                  : result.eligibility === "restricted" ? "#ef4444"
+                  : "#999"
+              }}>
+                {result.eligibility === "eligible" ? "✅ Yes — you can list this product"
+                  : result.eligibility === "restricted" ? "🚫 Restricted — approval required"
+                  : "❓ Unknown"}
+              </div>
+              {result.eligibilityReason && (
+                <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+                  {result.eligibilityReason}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Pro Analysis */}
           {tier === "pro" && result.profit && (
             <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 14 }}>
               <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Pro Analysis</div>
@@ -203,11 +235,13 @@ export function ScanPanel({ tier }: { tier: string }) {
             </div>
           )}
 
+          {/* Free tier upgrade prompt */}
           {tier === "free" && (
             <p style={{ fontSize: 13, color: "#666", borderTop: "1px solid #e5e7eb", paddingTop: 12, margin: 0 }}>
               <a href="/pricing" style={{ color: "#2563eb" }}>Upgrade to Pro</a> for profit, margin, ROI, and fee breakdown.
             </p>
           )}
+
         </div>
       )}
     </div>

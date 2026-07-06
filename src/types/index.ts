@@ -29,6 +29,8 @@ export interface ScanResultBase {
   fees?: number;
 
   competition?: "low" | "medium" | "high";
+  eligibility?: "eligible" | "restricted" | "unknown";
+  eligibilityReason?: string | null;
 }
 
 /** PRO RESULT (NOT EXTENDING BASE) */
@@ -56,6 +58,9 @@ export interface ScanResultPro {
     buyBoxPrice: number;
     competitionLevel: "low" | "medium" | "high";
   };
+  
+  eligibility?: "eligible" | "restricted" | "unknown";
+  eligibilityReason?: string | null;
 
   estimatedFees: {
     referralFee: number;
