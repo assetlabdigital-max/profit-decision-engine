@@ -66,7 +66,6 @@ export async function runScan({ request, tier, userId }: RunScanParams): Promise
         const netProfit = product.price - totalFees - cost;
         const margin = product.price > 0 ? (netProfit / product.price) * 100 : 0;
         const roi = cost > 0 ? (netProfit / cost) * 100 : 0;
-        const eligibility = await checkEligibility(asin);
 
         const { verdict, reason } = calcVerdict({
           profit: netProfit,
@@ -74,6 +73,9 @@ export async function runScan({ request, tier, userId }: RunScanParams): Promise
           reviews: product.reviews,
           margin,
         });
+
+        const eligibility = await checkEligibility(asin);
+        console.log(`[scan] eligibility for ${asin}: ${eligibility.status}`);
 
         base = {
           asin: product.asin,
@@ -86,7 +88,7 @@ export async function runScan({ request, tier, userId }: RunScanParams): Promise
           category: product.category,
           isMock: false,
           generatedAt: new Date().toISOString(),
-          eligibility: eligibility.status,        
+          eligibility: eligibility.status,
           eligibilityReason: eligibility.reason,
         };
 
