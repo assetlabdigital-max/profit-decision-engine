@@ -83,10 +83,11 @@ export async function runApifyActor<T = Record<string, unknown>>(
 
     if (!response.ok) {
       const text = await response.text().catch(() => "<unreadable body>");
-      return {
-        ok: false,
-        error: `Apify run failed: HTTP ${response.status} — ${text.slice(0, 300)}`,
-      };
+      const error = `Apify run failed: HTTP ${response.status} — ${text.slice(0, 300)}`;
+      if (response.status === 403 && text.includes("usage hard limit")) {
+        console.error("[apify] monthly usage hard limit exceeded — retail scans need a higher Apify quota or direct-scrape fallback");
+      }
+      return { ok: false, error };
     }
 
     const items = (await response.json()) as T[];

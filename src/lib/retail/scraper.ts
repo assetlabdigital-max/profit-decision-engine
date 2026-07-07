@@ -485,6 +485,10 @@ export function getLastRetailScrapeError(): string | null {
   return lastRetailScrapeError;
 }
 
+function isApifyUsageLimitError(error: string): boolean {
+  return error.includes("usage hard limit") || error.includes("platform-feature-disabled");
+}
+
 function parseItem(
   item: Record<string, unknown>,
   storeParser: (item: Record<string, unknown>) => ParsedRetail | null
@@ -508,6 +512,9 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
     if (direct) return direct;
   }
 
+  const jsonLdEarly = await scrapeJsonLdDirect(cleanUrl, store.name);
+  if (jsonLdEarly) return jsonLdEarly;
+
   const attempts = store.buildAttempts(cleanUrl);
 
   for (let i = 0; i < attempts.length; i++) {
@@ -521,6 +528,10 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
     if (!run.ok) {
       lastRetailScrapeError = run.error;
       console.error(`[retail/scraper] ${label} failed for ${store.name}:`, run.error);
+      if (isApifyUsageLimitError(run.error)) {
+        console.warn(`[retail/scraper] Apify quota exhausted — skipping remaining Apify attempts for ${store.name}`);
+        break;
+      }
       continue;
     }
 

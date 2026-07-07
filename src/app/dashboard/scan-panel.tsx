@@ -76,6 +76,7 @@ export function ScanPanel({ tier }: { tier: string }) {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [mock, setMock] = useState(false);
   const [mockReason, setMockReason] = useState<string | null>(null);
+  const [scrapeError, setScrapeError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleScan() {
@@ -84,6 +85,7 @@ export function ScanPanel({ tier }: { tier: string }) {
     setError(null);
     setResult(null);
     setMockReason(null);
+    setScrapeError(null);
 
     try {
       const input = asin.trim();
@@ -107,6 +109,7 @@ export function ScanPanel({ tier }: { tier: string }) {
       setResult(json.data);
       setMock(json.mock);
       setMockReason(json.mockReason ?? null);
+      setScrapeError(json.scrapeError ?? null);
     } catch (err) {
       setError("Network error — please try again.");
     } finally {
@@ -192,7 +195,9 @@ export function ScanPanel({ tier }: { tier: string }) {
           {mock && mockReason && (
             <p style={{ margin: "0 0 12px", fontSize: 13, color: "#b45309", background: "#fffbeb", padding: 10, borderRadius: 6 }}>
               {mockReason === "retail_scrape_failed"
-                ? "Could not read product name/price from the store URL (Apify scrape failed). Try the direct product page URL without extra query parameters."
+                ? scrapeError?.includes("usage hard limit")
+                  ? "Store scrape failed: Apify monthly usage limit is exceeded. Raise your Apify plan limit or wait for the billing cycle reset — the app cannot fetch live store prices until then."
+                  : "Could not read product name/price from the store URL. Try the direct product page URL without extra query parameters."
                 : "Found the store product but could not match it on Amazon. Try a more specific product URL or search by ASIN instead."}
             </p>
           )}
