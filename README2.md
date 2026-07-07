@@ -285,7 +285,7 @@ https://www.target.com/p/eos-shea-better-24h-moisture-body-lotion-beach-waves-16
 **Apify actors:**
 | Store | Primary actor | Fallback |
 |-------|---------------|----------|
-| Walgreens | `mscraper~walgreens-scraper` | `apify~e-commerce-scraping-tool` |
+| Walgreens | `scrapemint~ecommerce-scraper` → `apify~web-scraper` (RESIDENTIAL) | direct HTML + parser spider |
 | CVS | `getdataforme~cvs-scraper` | e-commerce tool |
 | Ulta | `buseta~ulta-advanced-scraper` | e-commerce tool |
 | Home Depot | e-commerce tool | `studio-amba~homedepot-scraper` |
