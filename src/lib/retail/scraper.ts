@@ -214,6 +214,26 @@ function buildWalmartAttempts(url: string): ScrapeAttempt[] {
   return attempts;
 }
 
+/** Encode special path chars (e.g. `nice!`) for Walgreens product URLs. */
+export function encodeWalgreensProductUrl(url: string): string {
+  try {
+    const parsed = new URL(url.trim());
+    if (!parsed.hostname.toLowerCase().includes("walgreens.com")) return url;
+    const segments = parsed.pathname.split("/").map((segment) => {
+      if (!segment) return segment;
+      try {
+        return encodeURIComponent(decodeURIComponent(segment));
+      } catch {
+        return encodeURIComponent(segment);
+      }
+    });
+    parsed.pathname = segments.join("/");
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return url;
+  }
+}
+
 export function walgreensProdIdFromUrl(url: string): string | null {
   const match = url.match(/ID=(prod\d+)/i);
   return match ? match[1].toLowerCase() : null;
@@ -284,6 +304,20 @@ function parseGenericRetailItem(item: Record<string, unknown>): ParsedRetail | n
   return { name, price, brand: brand || undefined };
 }
 
+function parseWalgreensParserItem(item: Record<string, unknown>): ParsedRetail | null {
+  const name = parseName(item.Title, item.title, item.productName, item.productDisplayName);
+  const price = parsePrice(
+    item.Sale_Price,
+    item.Regular_Price,
+    item.sale_price,
+    item.regular_price,
+    item.price
+  );
+  const brand = parseName(item.Brand, item.brand) || undefined;
+  if (!name || price == null) return null;
+  return { name, price, brand };
+}
+
 function parseWalgreensItem(item: Record<string, unknown>): ParsedRetail | null {
   const priceInfo = item.priceInfo as Record<string, unknown> | undefined;
   const rawUnit = item.unitPrice;
@@ -301,6 +335,10 @@ function parseWalgreensItem(item: Record<string, unknown>): ParsedRetail | null 
   const brand = parseName(item.beautyCategoryName, item.subBrandName, item.brand) || undefined;
   if (!name || price == null) return null;
   return { name, price, brand };
+}
+
+function parseWalgreensAnyItem(item: Record<string, unknown>): ParsedRetail | null {
+  return parseWalgreensParserItem(item) ?? parseWalgreensItem(item) ?? parseGenericRetailItem(item);
 }
 
 const STORE_CONFIGS: StoreConfig[] = [
@@ -405,24 +443,27 @@ const STORE_CONFIGS: StoreConfig[] = [
   {
     name: "Walgreens",
     domains: ["walgreens.com"],
-    buildAttempts: (url) => [
-      {
-        actorId: "mscraper~walgreens-scraper",
-        label: "startUrls",
-        input: {
-          startUrls: [{ url }],
-          proxy: {
-            useApifyProxy: true,
-            apifyProxyGroups: ["RESIDENTIAL"],
-            apifyProxyCountry: "US",
-          },
-          resultsLimit: 5,
+    buildAttempts: (url) => {
+      const encoded = encodeWalgreensProductUrl(url);
+      return [
+        {
+          actorId: "getdataforme~walgreens-parser-spider",
+          label: "parser-spider",
+          input: { Urls: [encoded] },
         },
-      },
-      buildEcommerceToolAttempt(url),
-    ],
+        {
+          actorId: "mscraper~walgreens-scraper",
+          label: "mscraper-startUrls",
+          input: {
+            startUrls: [{ url: encoded }],
+            proxy: { useApifyProxy: true, apifyProxyCountry: "US" },
+            resultsLimit: 3,
+          },
+        },
+      ];
+    },
     pickItem: pickWalgreensItem,
-    parser: parseWalgreensItem,
+    parser: parseWalgreensAnyItem,
   },
   {
     name: "CVS",
@@ -508,7 +549,7 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
     console.log(`[retail/scraper] ${store.name} attempt ${i + 1}/${attempts.length} (${label})`);
 
     const run = await runApifyActor<Record<string, unknown>>(actorId, input, {
-      timeoutSecs: i === 0 ? APIFY_TIMEOUT_SECS : 60,
+      timeoutSecs: i === 0 ? Math.max(APIFY_TIMEOUT_SECS, 120) : 90,
     });
 
     if (!run.ok) {
@@ -516,31 +557,36 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
       continue;
     }
 
-    const item = store.pickItem(run.items, cleanUrl);
-    if (!item) {
-      console.warn(`[retail/scraper] ${label}: no matching item for ${store.name}`);
-      continue;
+    const primary = store.pickItem(run.items, cleanUrl);
+    const orderedItems: Record<string, unknown>[] = [];
+    if (primary) orderedItems.push(primary);
+    for (const item of run.items) {
+      if (item && item !== primary) orderedItems.push(item);
     }
 
-    const parsed = store.parser(item);
-    if (!parsed) {
-      console.warn(
-        `[retail/scraper] ${label}: parse failed for ${store.name}:`,
-        JSON.stringify(item).slice(0, 400)
+    for (const item of orderedItems) {
+      const parsed = store.parser(item);
+      if (!parsed) {
+        continue;
+      }
+
+      console.log(
+        `[retail/scraper] ${store.name} via ${label}: name="${parsed.name}", price=${parsed.price}`
       );
-      continue;
+
+      return {
+        storeName: store.name,
+        storePrice: parsed.price,
+        productName: parsed.name,
+        productUrl: cleanUrl,
+        currency: "USD",
+        brand: parsed.brand,
+      };
     }
 
-    console.log(`[retail/scraper] ${store.name} via ${label}: name="${parsed.name}", price=${parsed.price}`);
-
-    return {
-      storeName: store.name,
-      storePrice: parsed.price,
-      productName: parsed.name,
-      productUrl: cleanUrl,
-      currency: "USD",
-      brand: parsed.brand,
-    };
+    console.warn(
+      `[retail/scraper] ${label}: no parseable item for ${store.name} (${run.items.length} raw item(s))`
+    );
   }
 
   console.error(`[retail/scraper] all ${attempts.length} attempt(s) failed for ${store.name}`);
