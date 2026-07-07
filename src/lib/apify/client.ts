@@ -50,7 +50,9 @@ export async function runApifyActor<T = Record<string, unknown>>(
 
   const timeoutSecs = options?.timeoutSecs ?? 90;
   const { apify } = getRuntimeConfig();
-  const url = `${APIFY_BASE_URL}/acts/${encodeURIComponent(actorId)}/run-sync-get-dataset-items?token=${encodeURIComponent(
+  // Apify actor paths use a literal tilde — encoding it breaks routing.
+  const actorPath = actorId.replace("/", "~");
+  const url = `${APIFY_BASE_URL}/acts/${actorPath}/run-sync-get-dataset-items?token=${encodeURIComponent(
     apify.token as string
   )}&timeout=${timeoutSecs}`;
 

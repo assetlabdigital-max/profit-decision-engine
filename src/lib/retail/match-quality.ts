@@ -4,7 +4,7 @@
  * Assesses how trustworthy a retail → Amazon product match is.
  */
 
-import type { RetailProduct } from "@/lib/retail/scraper";
+import type { RetailProduct } from "@/lib/retail/types";
 
 /** Brands sold only (or primarily) at one retailer — unlikely to have a 1:1 Amazon listing. */
 const STORE_EXCLUSIVE_BRANDS: Record<string, string[]> = {

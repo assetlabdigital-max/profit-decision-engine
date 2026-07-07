@@ -3,7 +3,7 @@
  * NODE RUNTIME ONLY.
  */
 
-import type { RetailProduct } from "@/lib/retail/scraper";
+import type { RetailProduct } from "@/lib/retail/types";
 import { encodeWalgreensProductUrl } from "@/lib/retail/stores";
 
 const BROWSER_HEADERS = {
