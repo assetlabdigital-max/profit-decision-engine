@@ -90,7 +90,7 @@ export function ScanPanel({ tier }: { tier: string }) {
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
         <input
           type="text"
-          placeholder="ASIN (e.g. B07XJ8C8F7)"
+          placeholder="ASIN or Costco/Walmart/Target URL"
           value={asin}
           onChange={(e) => setAsin(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleScan()}
@@ -104,7 +104,7 @@ export function ScanPanel({ tier }: { tier: string }) {
         />
         <input
           type="number"
-          placeholder="ASIN or Costco/Walmart/Target URL"
+          placeholder="Your cost $ (optional)"
           value={cost}
           onChange={(e) => setCost(e.target.value)}
           style={{

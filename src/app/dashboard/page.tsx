@@ -25,7 +25,7 @@ export default async function DashboardPage() {
 
       <h2 style={{ marginTop: 28 }}>Scan a product</h2>
       <p style={{ fontSize: 14, color: "#666", marginBottom: 12 }}>
-        Enter an Amazon ASIN to get a BUY / SKIP / RISK verdict with profit analysis.
+         Enter an Amazon ASIN — or paste a Costco, Walmart, or Target product URL to find the same item on Amazon and calculate your arbitrage margin.
       </p>
       <ScanPanel tier={tier} />
 
