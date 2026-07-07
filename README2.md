@@ -260,7 +260,13 @@ https://www.costco.com/p/-/super-nature-shampooconditioner-30-fl-oz-each/4000348
 ```
 기대: `demo data` 없음, **🛒 Retail Arbitrage** 섹션 표시.
 
-**다음:** Walmart URL fix — `khadinakbar~walmart-data-extractor` itemIds 모드 (배포 대기)
+**다음:** Walmart URL fix — `khadinakbar~walmart-data-extractor` itemIds 모드 ✅ `9937b06` 검증 완료
+
+**Walmart 프로덕션 검증 (gaming chair URL):**
+- `mock: false`, ASIN `B0H38CD82D`
+- Retail Arbitrage: Walmart **$99.00**
+- 응답 시간 ~2분 (itemIds Apify + Amazon match)
+- ⚠️ Amazon 매칭 confidence `medium` — 다른 브랜드 chair에 매칭될 수 있음 (ASIN/제목 확인 권장)
 
 ---
 
