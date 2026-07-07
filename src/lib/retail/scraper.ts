@@ -316,8 +316,48 @@ function parseWalgreensItem(item: Record<string, unknown>): ParsedRetail | null 
   return { name, price, brand };
 }
 
+function buildWalgreensWebScraperAttempt(url: string): ScrapeAttempt {
+  const encoded = encodeWalgreensProductUrl(url);
+  return {
+    actorId: "apify~web-scraper",
+    label: "web-scraper-residential",
+    input: {
+      startUrls: [{ url: encoded }],
+      maxRequestsPerCrawl: 1,
+      maxConcurrency: 1,
+      proxyConfiguration: RESIDENTIAL_PROXY,
+      pageFunction: `async function pageFunction(context) {
+        const $ = context.jQuery;
+        const og = $('meta[property="og:title"]').attr('content') || '';
+        const h1 = $('h1').first().text().trim();
+        const title = (og.split('|')[0] || h1 || '').trim();
+        const bodyHtml = $('body').html() || '';
+        const single = bodyHtml.match(/1\\/\\$(\\d+(?:\\.\\d{2})?)/i);
+        const plain = bodyHtml.match(/\\$(\\d+\\.\\d{2})(?:\\s*\\/|<)/i);
+        const price = single ? parseFloat(single[1]) : plain ? parseFloat(plain[1]) : null;
+        if (!title || !price) return null;
+        const brand = /nice!/i.test(title) ? 'Nice!' : undefined;
+        return { productName: title, price, brand };
+      }`,
+    },
+  };
+}
+
+function parseWebScraperItem(item: Record<string, unknown>): ParsedRetail | null {
+  const name = parseName(item.productName, item.title, item.name);
+  const price = parsePrice(item.price, item.storePrice);
+  const brand = parseName(item.brand) || undefined;
+  if (!name || price == null) return null;
+  return { name, price, brand: brand || undefined };
+}
+
 function parseWalgreensAnyItem(item: Record<string, unknown>): ParsedRetail | null {
-  return parseWalgreensParserItem(item) ?? parseWalgreensItem(item) ?? parseGenericRetailItem(item);
+  return (
+    parseWebScraperItem(item) ??
+    parseWalgreensParserItem(item) ??
+    parseWalgreensItem(item) ??
+    parseGenericRetailItem(item)
+  );
 }
 
 const STORE_CONFIGS: StoreConfig[] = [
@@ -426,19 +466,11 @@ const STORE_CONFIGS: StoreConfig[] = [
     buildAttempts: (url) => {
       const encoded = encodeWalgreensProductUrl(url);
       return [
+        buildWalgreensWebScraperAttempt(url),
         {
           actorId: "getdataforme~walgreens-parser-spider",
           label: "parser-spider",
           input: { Urls: [encoded] },
-        },
-        {
-          actorId: "mscraper~walgreens-scraper",
-          label: "mscraper-startUrls",
-          input: {
-            startUrls: [{ url: encoded }],
-            proxy: { useApifyProxy: true, apifyProxyCountry: "US" },
-            resultsLimit: 3,
-          },
         },
       ];
     },
