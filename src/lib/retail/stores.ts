@@ -32,3 +32,28 @@ export function retailStoreNameFromUrl(url: string): string | null {
   );
   return match?.name ?? null;
 }
+
+/** Encode special path chars (e.g. `nice!`) for Walgreens product URLs. */
+export function encodeWalgreensProductUrl(url: string): string {
+  try {
+    const parsed = new URL(url.trim());
+    if (!parsed.hostname.toLowerCase().includes("walgreens.com")) return url;
+    const segments = parsed.pathname.split("/").map((segment) => {
+      if (!segment) return segment;
+      try {
+        return encodeURIComponent(decodeURIComponent(segment));
+      } catch {
+        return encodeURIComponent(segment);
+      }
+    });
+    parsed.pathname = segments.join("/");
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return url;
+  }
+}
+
+export function walgreensProdIdFromUrl(url: string): string | null {
+  const match = url.match(/ID=(prod\d+)/i);
+  return match ? match[1].toLowerCase() : null;
+}

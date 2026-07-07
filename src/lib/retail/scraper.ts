@@ -6,8 +6,11 @@
  */
 
 import { runApifyActor } from "@/lib/apify/client";
+import { encodeWalgreensProductUrl, walgreensProdIdFromUrl } from "@/lib/retail/stores";
+import { scrapeWalgreensDirect } from "@/lib/retail/direct-scrape";
 
 export { isRetailUrl } from "@/lib/retail/stores";
+export { encodeWalgreensProductUrl, walgreensProdIdFromUrl } from "@/lib/retail/stores";
 
 export interface RetailProduct {
   storeName: string;
@@ -29,6 +32,7 @@ type ScrapeAttempt = {
 type StoreConfig = {
   name: string;
   domains: string[];
+  directScrape?: (url: string) => Promise<RetailProduct | null>;
   buildAttempts: (url: string) => ScrapeAttempt[];
   pickItem: (items: Record<string, unknown>[], url: string) => Record<string, unknown> | null;
   parser: (item: Record<string, unknown>) => ParsedRetail | null;
@@ -212,31 +216,6 @@ function buildWalmartAttempts(url: string): ScrapeAttempt[] {
   }
 
   return attempts;
-}
-
-/** Encode special path chars (e.g. `nice!`) for Walgreens product URLs. */
-export function encodeWalgreensProductUrl(url: string): string {
-  try {
-    const parsed = new URL(url.trim());
-    if (!parsed.hostname.toLowerCase().includes("walgreens.com")) return url;
-    const segments = parsed.pathname.split("/").map((segment) => {
-      if (!segment) return segment;
-      try {
-        return encodeURIComponent(decodeURIComponent(segment));
-      } catch {
-        return encodeURIComponent(segment);
-      }
-    });
-    parsed.pathname = segments.join("/");
-    return parsed.toString().replace(/\/$/, "");
-  } catch {
-    return url;
-  }
-}
-
-export function walgreensProdIdFromUrl(url: string): string | null {
-  const match = url.match(/ID=(prod\d+)/i);
-  return match ? match[1].toLowerCase() : null;
 }
 
 function pickUrlMatchedItem(
@@ -443,6 +422,7 @@ const STORE_CONFIGS: StoreConfig[] = [
   {
     name: "Walgreens",
     domains: ["walgreens.com"],
+    directScrape: scrapeWalgreensDirect,
     buildAttempts: (url) => {
       const encoded = encodeWalgreensProductUrl(url);
       return [
@@ -541,6 +521,11 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
   }
 
   console.log(`[retail/scraper] scraping ${store.name} URL: ${cleanUrl}`);
+
+  if (store.directScrape) {
+    const direct = await store.directScrape(cleanUrl);
+    if (direct) return direct;
+  }
 
   const attempts = store.buildAttempts(cleanUrl);
 
