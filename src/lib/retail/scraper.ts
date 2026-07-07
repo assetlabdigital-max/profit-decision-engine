@@ -18,10 +18,15 @@ export interface RetailProduct {
 
 type ParsedRetail = { name: string; price: number; brand?: string };
 
+type ScrapeAttempt = {
+  actorId: string;
+  input: Record<string, unknown>;
+  label: string;
+};
+
 type StoreConfig = {
   name: string;
-  actorId: string;
-  buildInputs: (url: string) => Record<string, unknown>[];
+  buildAttempts: (url: string) => ScrapeAttempt[];
   pickItem: (items: Record<string, unknown>[], url: string) => Record<string, unknown> | null;
   parser: (item: Record<string, unknown>) => ParsedRetail | null;
 };
@@ -32,6 +37,9 @@ const RESIDENTIAL_PROXY = {
   useApifyProxy: true,
   apifyProxyGroups: ["RESIDENTIAL"],
 };
+
+const WALMART_EXTRACTOR = "khadinakbar~walmart-data-extractor";
+const WALMART_SILENTFLOW = "silentflow~walmart-scraper";
 
 function parsePrice(...candidates: unknown[]): number | null {
   for (const candidate of candidates) {
@@ -87,9 +95,38 @@ export function costcoItemNumberFromUrl(url: string): string | null {
   return match ? match[1] : null;
 }
 
+/** Walmart /ip/slug/588046255 or /ip/588046255 */
+export function walmartItemIdFromUrl(url: string): string | null {
+  const match = url.match(/walmart\.com\/ip\/(?:[^/]+\/)?(\d+)/i);
+  return match ? match[1] : null;
+}
+
+export function walmartSearchQueryFromUrl(url: string): string | null {
+  const slugMatch = url.match(/walmart\.com\/ip\/([^/]+)\/(\d+)/i);
+  if (slugMatch && !/^\d+$/.test(slugMatch[1])) {
+    return slugMatch[1].replace(/-/g, " ").replace(/\s+/g, " ").trim();
+  }
+  return null;
+}
+
 function parseCostcoItem(item: Record<string, unknown>): ParsedRetail | null {
   const name = parseName(item.name, item.title, item.productName);
   const price = parsePrice(item.memberPrice, item.onlinePrice, item.price, item.salePrice);
+  const brand = parseName(item.brand) || undefined;
+  if (!name || price == null) return null;
+  return { name, price, brand };
+}
+
+function parseWalmartItem(item: Record<string, unknown>): ParsedRetail | null {
+  const name = parseName(item.name, item.title, item.productTitle);
+  const price = parsePrice(
+    item.price,
+    item.currentPrice,
+    item.priceString,
+    item.salePrice,
+    item.currentPriceString,
+    item.minPrice
+  );
   const brand = parseName(item.brand) || undefined;
   if (!name || price == null) return null;
   return { name, price, brand };
@@ -110,57 +147,155 @@ function pickCostcoItem(items: Record<string, unknown>[], url: string): Record<s
   return items[0];
 }
 
+function pickWalmartItem(items: Record<string, unknown>[], url: string): Record<string, unknown> | null {
+  if (items.length === 0) return null;
+  const itemId = walmartItemIdFromUrl(url);
+  if (itemId) {
+    const exact = items.find((item) => {
+      const id = String(item.itemId ?? item.usItemId ?? item.id ?? "");
+      return id === itemId;
+    });
+    if (exact) return exact;
+    const urlMatch = items.find((item) => String(item.url ?? item.productUrl ?? "").includes(itemId));
+    if (urlMatch) return urlMatch;
+  }
+  return items[0];
+}
+
+function buildWalmartAttempts(url: string): ScrapeAttempt[] {
+  const attempts: ScrapeAttempt[] = [];
+  const itemId = walmartItemIdFromUrl(url);
+  const searchQuery = walmartSearchQueryFromUrl(url);
+
+  // khadinakbar docs: itemIds mode is most reliable for /ip/ URLs
+  if (itemId) {
+    attempts.push({
+      actorId: WALMART_EXTRACTOR,
+      label: "extractor-itemIds",
+      input: {
+        mode: "itemIds",
+        itemIds: [itemId],
+        maxProducts: 1,
+        proxyConfiguration: RESIDENTIAL_PROXY,
+      },
+    });
+  }
+
+  attempts.push({
+    actorId: WALMART_EXTRACTOR,
+    label: "extractor-productUrls",
+    input: {
+      mode: "productUrls",
+      productUrls: [url],
+      maxProducts: 1,
+      proxyConfiguration: RESIDENTIAL_PROXY,
+    },
+  });
+
+  if (searchQuery) {
+    attempts.push({
+      actorId: WALMART_EXTRACTOR,
+      label: "extractor-search",
+      input: {
+        mode: "search",
+        searchQuery,
+        maxProducts: 5,
+        proxyConfiguration: RESIDENTIAL_PROXY,
+      },
+    });
+  }
+
+  // silentflow fallback
+  attempts.push(
+    {
+      actorId: WALMART_SILENTFLOW,
+      label: "silentflow-url-object",
+      input: {
+        urls: [{ url }],
+        maxItems: 1,
+        includeDetails: true,
+        proxyConfiguration: RESIDENTIAL_PROXY,
+      },
+    },
+    {
+      actorId: WALMART_SILENTFLOW,
+      label: "silentflow-url-string",
+      input: {
+        urls: [url],
+        maxItems: 1,
+        includeDetails: true,
+        proxyConfiguration: { useApifyProxy: true },
+      },
+    }
+  );
+
+  return attempts;
+}
+
 const STORE_CONFIGS: StoreConfig[] = [
   {
     name: "Costco",
-    actorId: "parseforge~costco-scraper",
-    buildInputs: (url) => {
-      const inputs: Record<string, unknown>[] = [];
+    buildAttempts: (url) => {
+      const attempts: ScrapeAttempt[] = [];
       const searchQuery = costcoSearchQueryFromUrl(url);
 
-      // /p/-/slug/id URLs often fail on direct startUrls — search first
       if (searchQuery) {
-        inputs.push({ maxItems: 10, searchQuery, proxyConfiguration: RESIDENTIAL_PROXY });
-        inputs.push({ maxItems: 10, searchQuery, proxyConfiguration: { useApifyProxy: true } });
+        attempts.push(
+          {
+            actorId: "parseforge~costco-scraper",
+            label: "search-residential",
+            input: { maxItems: 10, searchQuery, proxyConfiguration: RESIDENTIAL_PROXY },
+          },
+          {
+            actorId: "parseforge~costco-scraper",
+            label: "search-basic-proxy",
+            input: { maxItems: 10, searchQuery, proxyConfiguration: { useApifyProxy: true } },
+          }
+        );
       }
 
-      inputs.push(
-        { maxItems: 5, startUrls: [url], proxyConfiguration: RESIDENTIAL_PROXY },
-        { maxItems: 5, startUrls: [{ url }], proxyConfiguration: RESIDENTIAL_PROXY },
-        { maxItems: 5, startUrls: [url], proxyConfiguration: { useApifyProxy: true } }
+      attempts.push(
+        {
+          actorId: "parseforge~costco-scraper",
+          label: "startUrls-string",
+          input: { maxItems: 5, startUrls: [url], proxyConfiguration: RESIDENTIAL_PROXY },
+        },
+        {
+          actorId: "parseforge~costco-scraper",
+          label: "startUrls-object",
+          input: { maxItems: 5, startUrls: [{ url }], proxyConfiguration: RESIDENTIAL_PROXY },
+        },
+        {
+          actorId: "parseforge~costco-scraper",
+          label: "startUrls-basic-proxy",
+          input: { maxItems: 5, startUrls: [url], proxyConfiguration: { useApifyProxy: true } },
+        }
       );
 
-      return inputs;
+      return attempts;
     },
     pickItem: pickCostcoItem,
     parser: parseCostcoItem,
   },
   {
     name: "Walmart",
-    actorId: "silentflow~walmart-scraper",
-    buildInputs: (url) => [
-      {
-        urls: [{ url }],
-        maxItems: 1,
-        includeDetails: true,
-        proxyConfiguration: RESIDENTIAL_PROXY,
-      },
-    ],
-    pickItem: (items) => items[0] ?? null,
-    parser: (item) => {
-      const name = parseName(item.name, item.title, item.productName);
-      const price = parsePrice(item.price, item.currentPrice, item.priceString, item.salePrice);
-      const brand = parseName(item.brand) || undefined;
-      if (!name || price == null) return null;
-      return { name, price, brand };
-    },
+    buildAttempts: buildWalmartAttempts,
+    pickItem: pickWalmartItem,
+    parser: parseWalmartItem,
   },
   {
     name: "Target",
-    actorId: "parseforge~target-scraper",
-    buildInputs: (url) => [
-      { maxItems: 1, startUrls: [url], includeDetails: true, proxyConfiguration: RESIDENTIAL_PROXY },
-      { maxItems: 1, startUrls: [{ url }], includeDetails: true, proxyConfiguration: RESIDENTIAL_PROXY },
+    buildAttempts: (url) => [
+      {
+        actorId: "parseforge~target-scraper",
+        label: "startUrls-string",
+        input: { maxItems: 1, startUrls: [url], includeDetails: true, proxyConfiguration: RESIDENTIAL_PROXY },
+      },
+      {
+        actorId: "parseforge~target-scraper",
+        label: "startUrls-object",
+        input: { maxItems: 1, startUrls: [{ url }], includeDetails: true, proxyConfiguration: RESIDENTIAL_PROXY },
+      },
     ],
     pickItem: (items) => items[0] ?? null,
     parser: (item) => {
@@ -173,8 +308,13 @@ const STORE_CONFIGS: StoreConfig[] = [
   },
   {
     name: "Sam's Club",
-    actorId: "kawsar~sam-s-club-product-scraper",
-    buildInputs: (url) => [{ maxItems: 1, startUrls: [{ url }] }],
+    buildAttempts: (url) => [
+      {
+        actorId: "kawsar~sam-s-club-product-scraper",
+        label: "startUrls",
+        input: { maxItems: 1, startUrls: [{ url }] },
+      },
+    ],
     pickItem: (items) => items[0] ?? null,
     parser: (item) => {
       const name = parseName(item.product_name, item.name, item.title);
@@ -209,37 +349,37 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
 
   console.log(`[retail/scraper] scraping ${store.name} URL: ${cleanUrl}`);
 
-  const inputs = store.buildInputs(cleanUrl);
+  const attempts = store.buildAttempts(cleanUrl);
 
-  for (let i = 0; i < inputs.length; i++) {
-    const input = inputs[i];
-    console.log(`[retail/scraper] ${store.name} attempt ${i + 1}/${inputs.length}`);
+  for (let i = 0; i < attempts.length; i++) {
+    const { actorId, input, label } = attempts[i];
+    console.log(`[retail/scraper] ${store.name} attempt ${i + 1}/${attempts.length} (${label})`);
 
-    const run = await runApifyActor<Record<string, unknown>>(store.actorId, input, {
+    const run = await runApifyActor<Record<string, unknown>>(actorId, input, {
       timeoutSecs: APIFY_TIMEOUT_SECS,
     });
 
     if (!run.ok) {
-      console.error(`[retail/scraper] Apify attempt ${i + 1} failed for ${store.name}:`, run.error);
+      console.error(`[retail/scraper] ${label} failed for ${store.name}:`, run.error);
       continue;
     }
 
     const item = store.pickItem(run.items, cleanUrl);
     if (!item) {
-      console.warn(`[retail/scraper] attempt ${i + 1}: no matching item for ${store.name}`);
+      console.warn(`[retail/scraper] ${label}: no matching item for ${store.name}`);
       continue;
     }
 
     const parsed = store.parser(item);
     if (!parsed) {
       console.warn(
-        `[retail/scraper] attempt ${i + 1}: parse failed for ${store.name}:`,
+        `[retail/scraper] ${label}: parse failed for ${store.name}:`,
         JSON.stringify(item).slice(0, 400)
       );
       continue;
     }
 
-    console.log(`[retail/scraper] ${store.name}: name="${parsed.name}", price=${parsed.price}`);
+    console.log(`[retail/scraper] ${store.name} via ${label}: name="${parsed.name}", price=${parsed.price}`);
 
     return {
       storeName: store.name,
@@ -251,6 +391,6 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
     };
   }
 
-  console.error(`[retail/scraper] all ${inputs.length} attempt(s) failed for ${store.name}`);
+  console.error(`[retail/scraper] all ${attempts.length} attempt(s) failed for ${store.name}`);
   return null;
 }

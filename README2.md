@@ -260,9 +260,9 @@ https://www.costco.com/p/-/super-nature-shampooconditioner-30-fl-oz-each/4000348
 ```
 기대: `demo data` 없음, **🛒 Retail Arbitrage** 섹션 표시.
 
----
+**다음:** Walmart URL fix — `khadinakbar~walmart-data-extractor` itemIds 모드 (배포 대기)
 
-## 11. 문서 역할 구분
+---
 
 | 파일 | 용도 |
 |------|------|
