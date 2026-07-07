@@ -61,18 +61,25 @@ export async function runScan({ request, tier, userId }: RunScanParams): Promise
 
       if (product) {
         const cost = request.cost ?? 0;
-        const fees = await getProductFees(asin, product.price);
-        const totalFees = fees?.totalFees ?? product.price * 0.15 + 4.5;
-        const netProfit = product.price - totalFees - cost;
-        const margin = product.price > 0 ? (netProfit / product.price) * 100 : 0;
-        const roi = cost > 0 ? (netProfit / cost) * 100 : 0;
+        const priceAvailable = product.price > 0;
+        const fees = priceAvailable ? await getProductFees(asin, product.price) : null;
+        const totalFees = fees?.totalFees ?? (priceAvailable ? product.price * 0.15 + 4.5 : 0);
+        const netProfit = priceAvailable ? product.price - totalFees - cost : 0;
+        const margin = priceAvailable && product.price > 0 ? (netProfit / product.price) * 100 : 0;
+        const roi = priceAvailable && cost > 0 ? (netProfit / cost) * 100 : 0;
 
-        const { verdict, reason } = calcVerdict({
-          profit: netProfit,
-          rating: product.rating,
-          reviews: product.reviews,
-          margin,
-        });
+        const { verdict, reason } = priceAvailable
+          ? calcVerdict({
+              profit: netProfit,
+              rating: product.rating,
+              reviews: product.reviews,
+              margin,
+            })
+          : {
+              verdict: "SKIP" as Verdict,
+              reason:
+                "Amazon live price is unavailable — arbitrage profit cannot be calculated. Open the ASIN on Amazon to verify the current buy-box price.",
+            };
 
         const eligibility = await checkEligibility(asin);
         console.log(`[scan] eligibility for ${asin}: ${eligibility.status}`);
@@ -90,9 +97,11 @@ export async function runScan({ request, tier, userId }: RunScanParams): Promise
           generatedAt: new Date().toISOString(),
           eligibility: eligibility.status,
           eligibilityReason: eligibility.reason,
+          amazonPriceAvailable: priceAvailable,
+          profitAnalysisReliable: priceAvailable,
         };
 
-        if (tier === "pro") {
+        if (tier === "pro" && priceAvailable) {
           pro = {
             ...base,
             estimatedFees: fees ? {

@@ -268,6 +268,11 @@ https://www.costco.com/p/-/super-nature-shampooconditioner-30-fl-oz-each/4000348
 - 응답 시간 ~2분 (itemIds Apify + Amazon match)
 - ⚠️ Amazon 매칭 confidence `medium` — 다른 브랜드 chair에 매칭될 수 있음 (ASIN/제목 확인 권장)
 
+**Retail match quality (2026-07-07):**
+- `src/lib/retail/match-quality.ts` — store-exclusive brand 감지, title overlap scoring
+- Amazon `$0` → `Unavailable`, misleading RISK/profit 숨김
+- All in Motion 등 Target 전용 브랜드 → confidence `low` + 경고
+
 ---
 
 | 파일 | 용도 |

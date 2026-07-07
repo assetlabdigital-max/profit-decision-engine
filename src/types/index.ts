@@ -1,6 +1,18 @@
 export type Tier = "free" | "pro";
 export type Verdict = "BUY" | "SKIP" | "RISK";
 
+export interface RetailArbitrageInfo {
+  storeName: string;
+  storePrice: number;
+  storeProductName: string;
+  amazonTitle: string;
+  matchConfidence: "high" | "medium" | "low";
+  matchWarnings?: string[];
+  storeBrand?: string | null;
+  isStoreExclusiveBrand?: boolean;
+  titleOverlapScore?: number;
+}
+
 /** REQUEST */
 export interface ScanRequest {
   asin?: string;
@@ -31,6 +43,12 @@ export interface ScanResultBase {
   competition?: "low" | "medium" | "high";
   eligibility?: "eligible" | "restricted" | "unknown";
   eligibilityReason?: string | null;
+
+  /** False when live Amazon buy-box price could not be fetched (do not trust $0). */
+  amazonPriceAvailable?: boolean;
+  /** False when retail→Amazon match is too weak for arbitrage math. */
+  profitAnalysisReliable?: boolean;
+  retailArbitrage?: RetailArbitrageInfo;
 }
 
 /** PRO RESULT (NOT EXTENDING BASE) */
@@ -74,6 +92,10 @@ export interface ScanResultPro {
     marginPercent: number;
     roiPercent: number;
   };
+
+  amazonPriceAvailable?: boolean;
+  profitAnalysisReliable?: boolean;
+  retailArbitrage?: RetailArbitrageInfo;
 }
 
 /** UNION */

@@ -12,6 +12,8 @@ interface ScanResult {
   reviewCount: number;
   category: string;
   isMock: boolean;
+  amazonPriceAvailable?: boolean;
+  profitAnalysisReliable?: boolean;
   eligibility?: "eligible" | "restricted" | "unknown";
   eligibilityReason?: string | null;
   estimatedFees?: {
@@ -31,11 +33,15 @@ interface ScanResult {
     competitionLevel: "low" | "medium" | "high";
   };
   retailArbitrage?: {
-  storeName: string;
-  storePrice: number;
-  storeProductName: string;
-  amazonTitle: string;
-  matchConfidence: "high" | "medium" | "low";
+    storeName: string;
+    storePrice: number;
+    storeProductName: string;
+    amazonTitle: string;
+    matchConfidence: "high" | "medium" | "low";
+    matchWarnings?: string[];
+    storeBrand?: string | null;
+    isStoreExclusiveBrand?: boolean;
+    titleOverlapScore?: number;
   };
 }
 
@@ -56,6 +62,11 @@ function isProductUrl(value: string): boolean {
     v.includes("target.com") ||
     v.includes("samsclub.com")
   );
+}
+
+function formatAmazonPrice(price: number, available?: boolean): string {
+  if (available === false || price <= 0) return "Unavailable";
+  return `$${price.toFixed(2)}`;
 }
 
 export function ScanPanel({ tier }: { tier: string }) {
@@ -200,8 +211,10 @@ export function ScanPanel({ tier }: { tier: string }) {
           {/* Basic Stats */}
           <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 16 }}>
             <div>
-              <div style={{ fontSize: 11, color: "#999", textTransform: "uppercase" }}>Price</div>
-              <div style={{ fontWeight: 600 }}>${result.price.toFixed(2)}</div>
+              <div style={{ fontSize: 11, color: "#999", textTransform: "uppercase" }}>Amazon Price</div>
+              <div style={{ fontWeight: 600 }}>
+                {formatAmazonPrice(result.price, result.amazonPriceAvailable)}
+              </div>
             </div>
             <div>
               <div style={{ fontSize: 11, color: "#999", textTransform: "uppercase" }}>Rating</div>
@@ -214,10 +227,24 @@ export function ScanPanel({ tier }: { tier: string }) {
           </div>
 
 {result.retailArbitrage && (
-  <div style={{ marginBottom: 16, padding: 12, background: "#f0fdf4", borderRadius: 6, border: "1px solid #bbf7d0" }}>
+  <div style={{
+    marginBottom: 16,
+    padding: 12,
+    background: result.retailArbitrage.matchConfidence === "low" ? "#fffbeb" : "#f0fdf4",
+    borderRadius: 6,
+    border: `1px solid ${result.retailArbitrage.matchConfidence === "low" ? "#fde68a" : "#bbf7d0"}`,
+  }}>
     <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
       🛒 Retail Arbitrage
+      {result.retailArbitrage.isStoreExclusiveBrand && (
+        <span style={{ marginLeft: 8, fontSize: 11, color: "#b45309", fontWeight: 500 }}>
+          Store brand
+        </span>
+      )}
     </div>
+    <p style={{ margin: "0 0 10px", fontSize: 12, color: "#666" }}>
+      Store: {result.retailArbitrage.storeProductName}
+    </p>
     <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
       <div>
         <div style={{ fontSize: 11, color: "#999", textTransform: "uppercase" }}>{result.retailArbitrage.storeName} Price</div>
@@ -225,18 +252,31 @@ export function ScanPanel({ tier }: { tier: string }) {
       </div>
       <div>
         <div style={{ fontSize: 11, color: "#999", textTransform: "uppercase" }}>Amazon Price</div>
-        <div style={{ fontWeight: 600 }}>${result.price.toFixed(2)}</div>
+        <div style={{ fontWeight: 600 }}>{formatAmazonPrice(result.price, result.amazonPriceAvailable)}</div>
       </div>
-      <div>
-        <div style={{ fontSize: 11, color: "#999", textTransform: "uppercase" }}>Price Difference</div>
-        <div style={{ fontWeight: 600, color: (result.price - result.retailArbitrage.storePrice) > 0 ? "#16a34a" : "#ef4444" }}>
-          ${(result.price - result.retailArbitrage.storePrice).toFixed(2)}
+      {result.amazonPriceAvailable !== false && result.price > 0 && (
+        <div>
+          <div style={{ fontSize: 11, color: "#999", textTransform: "uppercase" }}>Price Difference</div>
+          <div style={{ fontWeight: 600, color: (result.price - result.retailArbitrage.storePrice) > 0 ? "#16a34a" : "#ef4444" }}>
+            ${(result.price - result.retailArbitrage.storePrice).toFixed(2)}
+          </div>
         </div>
-      </div>
+      )}
     </div>
     <div style={{ fontSize: 12, color: "#666", marginTop: 8 }}>
-      Match confidence: {result.retailArbitrage.matchConfidence} · Amazon: "{result.retailArbitrage.amazonTitle.slice(0, 60)}..."
+      Match confidence: {result.retailArbitrage.matchConfidence}
+      {result.retailArbitrage.titleOverlapScore != null && (
+        <> · Title overlap: {Math.round(result.retailArbitrage.titleOverlapScore * 100)}%</>
+      )}
     </div>
+    <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+      Amazon: &quot;{result.retailArbitrage.amazonTitle.slice(0, 80)}{result.retailArbitrage.amazonTitle.length > 80 ? "…" : ""}&quot;
+    </div>
+    {result.retailArbitrage.matchWarnings?.map((warning) => (
+      <p key={warning} style={{ margin: "8px 0 0", fontSize: 12, color: "#b45309" }}>
+        ⚠️ {warning}
+      </p>
+    ))}
   </div>
 )}
 
@@ -265,7 +305,7 @@ export function ScanPanel({ tier }: { tier: string }) {
           )}
 
           {/* Pro Analysis */}
-          {tier === "pro" && result.profit && (
+          {tier === "pro" && result.profit && result.profitAnalysisReliable !== false && (
             <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 14 }}>
               <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Pro Analysis</div>
               <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
@@ -293,6 +333,12 @@ export function ScanPanel({ tier }: { tier: string }) {
                 )}
               </div>
             </div>
+          )}
+
+          {tier === "pro" && result.profitAnalysisReliable === false && (
+            <p style={{ fontSize: 13, color: "#b45309", borderTop: "1px solid #e5e7eb", paddingTop: 12, margin: 0 }}>
+              Pro profit analysis hidden — store brand match or Amazon price is too unreliable for arbitrage math.
+            </p>
           )}
 
           {/* Free tier upgrade prompt */}
