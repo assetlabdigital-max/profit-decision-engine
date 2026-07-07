@@ -39,8 +39,7 @@ type StoreConfig = {
   parser: (item: Record<string, unknown>) => ParsedRetail | null;
 };
 
-const APIFY_TIMEOUT_SECS = 100;
-const DEFAULT_MAX_ATTEMPTS = 3;
+const DEFAULT_MAX_ATTEMPTS = 4;
 
 const RESIDENTIAL_PROXY = {
   useApifyProxy: true,
@@ -49,18 +48,6 @@ const RESIDENTIAL_PROXY = {
 
 const WALMART_EXTRACTOR = "khadinakbar~walmart-data-extractor";
 const ECOMMERCE_TOOL = "apify~e-commerce-scraping-tool";
-const SCRAPEMINT = "scrapemint~ecommerce-scraper";
-
-function buildScrapemintAttempt(url: string): ScrapeAttempt {
-  return {
-    actorId: SCRAPEMINT,
-    label: "scrapemint-jsonld",
-    input: {
-      productUrls: [url],
-      proxyConfiguration: RESIDENTIAL_PROXY,
-    },
-  };
-}
 
 function buildEcommerceToolAttempt(url: string): ScrapeAttempt {
   return {
@@ -133,7 +120,6 @@ function buildJsonLdWebScraperAttempt(url: string): ScrapeAttempt {
 
 function finalizeAttempts(attempts: ScrapeAttempt[], url: string, max?: number): ScrapeAttempt[] {
   const candidates = [
-    buildScrapemintAttempt(url),
     ...attempts,
     buildEcommerceToolAttempt(url),
     buildJsonLdWebScraperAttempt(url),
@@ -146,6 +132,19 @@ function finalizeAttempts(attempts: ScrapeAttempt[], url: string, max?: number):
       return true;
     })
     .slice(0, max ?? DEFAULT_MAX_ATTEMPTS);
+}
+
+function attemptTimeoutSecs(label: string): number {
+  if (
+    label.startsWith("target-") ||
+    label.startsWith("costco-") ||
+    label.includes("extractor") ||
+    label.startsWith("sams-")
+  ) {
+    return 120;
+  }
+  if (label === "web-scraper-jsonld" || label === "web-scraper-residential") return 90;
+  return 80;
 }
 
 function parsePrice(...candidates: unknown[]): number | null {
@@ -497,6 +496,11 @@ const STORE_CONFIGS: StoreConfig[] = [
         label: "target-startUrls",
         input: { maxItems: 1, startUrls: [url], includeDetails: true, proxyConfiguration: RESIDENTIAL_PROXY },
       },
+      {
+        actorId: "parseforge~target-scraper",
+        label: "target-startUrls-object",
+        input: { maxItems: 1, startUrls: [{ url }], includeDetails: true, proxyConfiguration: RESIDENTIAL_PROXY },
+      },
     ],
     pickItem: (items) => items[0] ?? null,
     parser: (item) => {
@@ -619,7 +623,7 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
     console.log(`[retail/scraper] ${store.name} attempt ${i + 1}/${attempts.length} (${label})`);
 
     const run = await runApifyActor<Record<string, unknown>>(actorId, input, {
-      timeoutSecs: APIFY_TIMEOUT_SECS,
+      timeoutSecs: attemptTimeoutSecs(label),
     });
 
     if (!run.ok) {

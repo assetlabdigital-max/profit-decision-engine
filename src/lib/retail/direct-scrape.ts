@@ -122,7 +122,7 @@ export async function scrapeJsonLdDirect(
   try {
     const response = await fetch(url, {
       headers: BROWSER_HEADERS,
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(8_000),
       cache: "no-store",
     });
 
@@ -178,7 +178,7 @@ export async function scrapeWalgreensDirect(url: string): Promise<RetailProduct 
   try {
     const response = await fetch(productUrl, {
       headers: BROWSER_HEADERS,
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(8_000),
       cache: "no-store",
     });
 
