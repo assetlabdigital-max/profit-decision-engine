@@ -1,7 +1,7 @@
 # Profit Decision Engine — 인수인계 문서
 
 > **마지막 업데이트:** 2026-07-07 (Cursor 로컬, Agent 모드)  
-> **최신 커밋:** `3f9155e` — Fix code-doc gaps and add Vercel deployment config  
+> **최신 커밋:** `09fe79f` (handover doc) / `3f9155e` (1~6번 작업 본체)  
 > **목적:** 토큰 제한·계정 전환 시 다음 세션에서 바로 이어서 작업할 수 있도록 현재 상태를 기록합니다.  
 > **규칙:** 이 파일은 작업할 때마다 **항상** 최신 상태로 업데이트한다 (별도 명령 불필요).
 
