@@ -1,7 +1,7 @@
 # Profit Decision Engine — 인수인계 문서
 
-> **마지막 업데이트:** 2026-07-07 14:48 (Cursor 로컬, Agent 모드)  
-> **최신 커밋:** `git log -1 --oneline` 참고 (이번 push 직후 확인)  
+> **마지막 업데이트:** 2026-07-07 15:45 (Cursor 로컬, Agent 모드)  
+> **최신 커밋:** variant mismatch 감지 — push 직후 `git log -1 --oneline` 확인  
 > **목적:** 토큰 제한·계정 전환 시 다음 세션에서 바로 이어서 작업할 수 있도록 현재 상태를 기록합니다.  
 > **규칙:** 이 파일은 작업할 때마다 **항상** 최신 상태로 업데이트한다 (별도 명령 불필요).
 
@@ -9,35 +9,19 @@
 
 ## ⚠️ 세션 중단점 — 다음 계정이 여기서 시작
 
-**이 세션에서 멈춤.** 아래는 이미 끝난 것 — **다시 하지 말 것:**
+**이번 세션:** Retail variant/scent/pack mismatch 감지 구현 완료 → 커밋·push 후 eos Target URL 프로덕션 재검증.
 
 | 항목 | 상태 | 비고 |
 |------|------|------|
-| git push | ✅ 완료 | `origin/main` = `90c3b88` |
-| Vercel link | ✅ 완료 | `.vercel/` 생성됨 (gitignored) |
-| 프로덕션 health | ✅ 확인 | 전 서비스 `live`, warnings `[]` |
-| `npm run build` | ✅ 성공 | 2026-07-07 |
-| `npm run smoke` (로컬) | ✅ 5/5 | `http://localhost:3000` |
-| smoke-test 스크립트 작성 | ✅ 완료 | `scripts/smoke-test.js` (아직 미커밋) |
+| variant mismatch 코드 | ✅ 완료 | `match-quality.ts`, `amazon-match.ts`, `scan-panel.tsx` |
+| `npm run typecheck` / `build` | ✅ 성공 | 2026-07-07 |
+| git push | ⏳ 진행 중 | variant mismatch 커밋 후 push |
+| eos Target 프로덕션 재테스트 | ⏳ push 후 | 아래 §12 참고 |
 
-**미커밋 변경 (워킹 트리):**
-```
- M README2.md
- M package.json
-?? scripts/smoke-test.js
-```
-
-**다음 세션 첫 작업 (순서 고정):**
-1. `git status` — 위 3파일이 아직 미커밋인지 확인 (이미 커밋됐으면 skip)
-2. 미커밋이면 → 커밋 + `git push origin main`
-3. `npm run smoke -- https://www.profit-decision-engine.com` (프로덕션 smoke, 아직 **미실행**)
-4. Stripe checkout E2E 수동 테스트 (로그인 → pricing → 결제 → Pro tier)
-
-**아직 안 한 것 (중복 금지):**
-- ❌ 프로덕션 smoke 미실행
-- ❌ Stripe checkout E2E 수동 테스트 미실행
-- ❌ TikTok Apify refresh 수동 테스트 미실행
-- ❌ 이번 변경 커밋·push 미완료
+**다음 세션 첫 작업 (push·재테스트 완료 후):**
+1. eos Beach Waves URL 프로덕션 결과 확인 (`variantMismatch: true`, confidence `low`, SKIP)
+2. Stripe checkout E2E 수동 테스트
+3. TikTok Apify refresh 수동 테스트
 
 ---
 
@@ -268,10 +252,25 @@ https://www.costco.com/p/-/super-nature-shampooconditioner-30-fl-oz-each/4000348
 - 응답 시간 ~2분 (itemIds Apify + Amazon match)
 - ⚠️ Amazon 매칭 confidence `medium` — 다른 브랜드 chair에 매칭될 수 있음 (ASIN/제목 확인 권장)
 
-**Retail match quality (2026-07-07):**
+**Retail match quality (`f662292`):**
 - `src/lib/retail/match-quality.ts` — store-exclusive brand 감지, title overlap scoring
 - Amazon `$0` → `Unavailable`, misleading RISK/profit 숨김
 - All in Motion 등 Target 전용 브랜드 → confidence `low` + 경고
+
+**Variant / pack mismatch 감지 (2026-07-07):**
+- **증상:** Target eos Beach Waves 단품이 Amazon Vanilla Cashmere 2-Pack에 `confidence: high`로 매칭, profit 분석 신뢰됨
+- **수정:** `detectVariantMismatch()` — pack count (single vs 2-pack), scent/variant 토큰 불일치 감지
+- `retailAmazonMatchScore()` — mismatch 시 점수 0.35× 패널티 → 더 적합한 ASIN 우선
+- `assessRetailMatchQuality()` — mismatch 시 confidence `low`, `profitAnalysisReliable: false`, 경고 + SKIP
+- UI: Retail Arbitrage 노란 박스 + **Variant mismatch** 배지 (`scan-panel.tsx`)
+
+**eos Target 재테스트 URL:**
+```
+https://www.target.com/p/eos-shea-better-24h-moisture-body-lotion-beach-waves-16-fl-oz/-/A-95195102
+```
+기대: `variantMismatch: true`, `matchConfidence: low`, warnings에 pack/variant 문구, Pro profit 숨김, verdict SKIP.
+
+⚠️ Target scrape 가격 ~$35는 실제 소매가(~$8–12)와 다를 수 있음 — Apify actor 데이터 품질 별도 조사 필요.
 
 ---
 

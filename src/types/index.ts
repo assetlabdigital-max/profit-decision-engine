@@ -10,6 +10,7 @@ export interface RetailArbitrageInfo {
   matchWarnings?: string[];
   storeBrand?: string | null;
   isStoreExclusiveBrand?: boolean;
+  variantMismatch?: boolean;
   titleOverlapScore?: number;
 }
 

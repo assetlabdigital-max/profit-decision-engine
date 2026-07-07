@@ -131,6 +131,7 @@ export async function runRetailScan({
       matchWarnings: quality.warnings,
       storeBrand: quality.storeBrandLabel,
       isStoreExclusiveBrand: quality.isStoreExclusiveBrand,
+      variantMismatch: quality.variantMismatch,
       titleOverlapScore: quality.overlapScore,
     },
   };

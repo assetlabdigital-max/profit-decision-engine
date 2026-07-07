@@ -41,6 +41,7 @@ interface ScanResult {
     matchWarnings?: string[];
     storeBrand?: string | null;
     isStoreExclusiveBrand?: boolean;
+    variantMismatch?: boolean;
     titleOverlapScore?: number;
   };
 }
@@ -230,15 +231,20 @@ export function ScanPanel({ tier }: { tier: string }) {
   <div style={{
     marginBottom: 16,
     padding: 12,
-    background: result.retailArbitrage.matchConfidence === "low" ? "#fffbeb" : "#f0fdf4",
+    background: result.retailArbitrage.matchConfidence === "low" || result.retailArbitrage.variantMismatch ? "#fffbeb" : "#f0fdf4",
     borderRadius: 6,
-    border: `1px solid ${result.retailArbitrage.matchConfidence === "low" ? "#fde68a" : "#bbf7d0"}`,
+    border: `1px solid ${result.retailArbitrage.matchConfidence === "low" || result.retailArbitrage.variantMismatch ? "#fde68a" : "#bbf7d0"}`,
   }}>
     <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
       🛒 Retail Arbitrage
       {result.retailArbitrage.isStoreExclusiveBrand && (
         <span style={{ marginLeft: 8, fontSize: 11, color: "#b45309", fontWeight: 500 }}>
           Store brand
+        </span>
+      )}
+      {result.retailArbitrage.variantMismatch && (
+        <span style={{ marginLeft: 8, fontSize: 11, color: "#b45309", fontWeight: 500 }}>
+          Variant mismatch
         </span>
       )}
     </div>
