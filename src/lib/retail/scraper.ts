@@ -31,7 +31,7 @@ type StoreConfig = {
   parser: (item: Record<string, unknown>) => ParsedRetail | null;
 };
 
-const APIFY_TIMEOUT_SECS = 120;
+const APIFY_TIMEOUT_SECS = 90;
 
 const RESIDENTIAL_PROXY = {
   useApifyProxy: true,
@@ -39,7 +39,6 @@ const RESIDENTIAL_PROXY = {
 };
 
 const WALMART_EXTRACTOR = "khadinakbar~walmart-data-extractor";
-const WALMART_SILENTFLOW = "silentflow~walmart-scraper";
 
 function parsePrice(...candidates: unknown[]): number | null {
   for (const candidate of candidates) {
@@ -167,7 +166,7 @@ function buildWalmartAttempts(url: string): ScrapeAttempt[] {
   const itemId = walmartItemIdFromUrl(url);
   const searchQuery = walmartSearchQueryFromUrl(url);
 
-  // khadinakbar docs: itemIds mode is most reliable for /ip/ URLs
+  // itemIds is the most reliable path — try it alone first to stay within Vercel limits
   if (itemId) {
     attempts.push({
       actorId: WALMART_EXTRACTOR,
@@ -181,17 +180,7 @@ function buildWalmartAttempts(url: string): ScrapeAttempt[] {
     });
   }
 
-  attempts.push({
-    actorId: WALMART_EXTRACTOR,
-    label: "extractor-productUrls",
-    input: {
-      mode: "productUrls",
-      productUrls: [url],
-      maxProducts: 1,
-      proxyConfiguration: RESIDENTIAL_PROXY,
-    },
-  });
-
+  // One search fallback if itemIds fails (slug from /ip/name/id)
   if (searchQuery) {
     attempts.push({
       actorId: WALMART_EXTRACTOR,
@@ -199,35 +188,11 @@ function buildWalmartAttempts(url: string): ScrapeAttempt[] {
       input: {
         mode: "search",
         searchQuery,
-        maxProducts: 5,
+        maxProducts: 3,
         proxyConfiguration: RESIDENTIAL_PROXY,
       },
     });
   }
-
-  // silentflow fallback
-  attempts.push(
-    {
-      actorId: WALMART_SILENTFLOW,
-      label: "silentflow-url-object",
-      input: {
-        urls: [{ url }],
-        maxItems: 1,
-        includeDetails: true,
-        proxyConfiguration: RESIDENTIAL_PROXY,
-      },
-    },
-    {
-      actorId: WALMART_SILENTFLOW,
-      label: "silentflow-url-string",
-      input: {
-        urls: [url],
-        maxItems: 1,
-        includeDetails: true,
-        proxyConfiguration: { useApifyProxy: true },
-      },
-    }
-  );
 
   return attempts;
 }
@@ -356,7 +321,7 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
     console.log(`[retail/scraper] ${store.name} attempt ${i + 1}/${attempts.length} (${label})`);
 
     const run = await runApifyActor<Record<string, unknown>>(actorId, input, {
-      timeoutSecs: APIFY_TIMEOUT_SECS,
+      timeoutSecs: i === 0 ? APIFY_TIMEOUT_SECS : 60,
     });
 
     if (!run.ok) {

@@ -1,7 +1,7 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// Retail scans call Apify synchronously (up to ~120s). Vercel must allow it.
-export const maxDuration = 120;
+// Retail scans call Apify synchronously (up to ~180s). Vercel must allow it.
+export const maxDuration = 300;
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";

@@ -4,7 +4,7 @@
   "regions": ["iad1"],
   "functions": {
     "src/app/api/scan/route.ts": {
-      "maxDuration": 120
+      "maxDuration": 300
     },
     "src/app/api/tiktok/refresh/route.ts": {
       "maxDuration": 120
