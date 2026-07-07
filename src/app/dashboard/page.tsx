@@ -1,5 +1,6 @@
 import { auth } from "@/auth/auth";
 import { resolveTier } from "@/lib/scan/resolve-tier";
+import { RETAIL_STORE_HINT } from "@/lib/retail/stores";
 import { TiktokTrendingPanel } from "@/app/dashboard/tiktok-trending-panel";
 import { ScanPanel } from "@/app/dashboard/scan-panel";
 
@@ -25,7 +26,7 @@ export default async function DashboardPage() {
 
       <h2 style={{ marginTop: 28 }}>Scan a product</h2>
       <p style={{ fontSize: 14, color: "#666", marginBottom: 12 }}>
-         Enter an Amazon ASIN — or paste a Costco, Walmart, or Target product URL to find the same item on Amazon and calculate your arbitrage margin.
+         Enter an Amazon ASIN — or paste a {RETAIL_STORE_HINT} product URL to find the same item on Amazon and calculate your arbitrage margin.
       </p>
       <ScanPanel tier={tier} />
 

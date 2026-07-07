@@ -9,14 +9,12 @@
 
 ## ⚠️ 세션 중단점 — 다음 계정이 여기서 시작
 
-**이번 세션:** Retail variant/scent/pack mismatch 감지 구현 완료 → 커밋·push 후 eos Target URL 프로덕션 재검증.
+**이번 세션:** Walgreens·CVS·Ulta·Home Depot·Best Buy retail URL 지원 추가 (Sam's Club proxy 개선).
 
 | 항목 | 상태 | 비고 |
 |------|------|------|
-| variant mismatch 코드 | ✅ 완료 | `match-quality.ts`, `amazon-match.ts`, `scan-panel.tsx` |
-| `npm run typecheck` / `build` | ✅ 성공 | 2026-07-07 |
-| git push | ✅ 완료 | `e787ca8` → `origin/main` |
-| eos Target 프로덕션 재테스트 | ✅ 완료 | `variantMismatch: true`, confidence `low`, SKIP |
+| 9개 소매점 URL 스캔 | ✅ 코드 완료 | `stores.ts` + `scraper.ts` Apify actors |
+| Walgreens 프로덕션 재테스트 | ⏳ push 후 | Nice! purified water URL |
 
 **다음 세션 첫 작업 (push·재테스트 완료 후):**
 1. eos Beach Waves URL 프로덕션 결과 확인 (`variantMismatch: true`, confidence `low`, SKIP)
@@ -277,6 +275,28 @@ https://www.target.com/p/eos-shea-better-24h-moisture-body-lotion-beach-waves-16
 - 이전 버그(Vanilla Cashmere 2-Pack + `confidence: high`) **해소됨**
 
 ⚠️ Target scrape 가격 ~$35는 실제 소매가(~$8–12)와 다를 수 있음 — Apify actor 데이터 품질 별도 조사 필요.
+
+---
+
+## 13. 소매점 URL 확장 (2026-07-07)
+
+**지원 소매점 (9개):** Costco, Walmart, Target, Sam's Club, **Walgreens**, **CVS**, **Ulta**, **Home Depot**, **Best Buy**
+
+**Apify actors:**
+| Store | Primary actor | Fallback |
+|-------|---------------|----------|
+| Walgreens | `mscraper~walgreens-scraper` | `apify~e-commerce-scraping-tool` |
+| CVS | `getdataforme~cvs-scraper` | e-commerce tool |
+| Ulta | `buseta~ulta-advanced-scraper` | e-commerce tool |
+| Home Depot | e-commerce tool | `studio-amba~homedepot-scraper` |
+| Best Buy | `sovereigntaylor~bestbuy-scraper` | e-commerce tool |
+| Sam's Club | `kawsar~sam-s-club-product-scraper` (+ RESIDENTIAL proxy) | e-commerce tool |
+
+**Walgreens 재테스트 URL:**
+```
+https://www.walgreens.com/store/c/nice!-purified-water/ID=prod6201760-product
+```
+기대: `mock: false`, Retail Arbitrage 섹션, Nice! store-brand 경고 (동일 Amazon SKU 없을 수 있음).
 
 ---
 

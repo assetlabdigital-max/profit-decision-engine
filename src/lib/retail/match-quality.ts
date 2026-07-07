@@ -23,6 +23,8 @@ const STORE_EXCLUSIVE_BRANDS: Record<string, string[]> = {
   Costco: ["kirkland signature", "kirkland"],
   Walmart: ["great value", "mainstays", "bettergoods", "equate"],
   "Sam's Club": ["member's mark", "members mark"],
+  Walgreens: ["nice!", "nice", "walgreens brand"],
+  CVS: ["cvs health", "gold emblem", "live better"],
 };
 
 const STOP_WORDS = new Set([

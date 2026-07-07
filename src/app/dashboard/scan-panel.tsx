@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { isRetailUrl, RETAIL_STORE_HINT } from "@/lib/retail/stores";
 
 interface ScanResult {
   asin: string;
@@ -53,15 +54,13 @@ const VERDICT_COLORS: Record<string, string> = {
 };
 
 function isProductUrl(value: string): boolean {
-  const v = value.trim().toLowerCase();
+  const v = value.trim();
+  if (!v) return false;
   return (
     v.startsWith("http://") ||
     v.startsWith("https://") ||
-    v.includes("amazon.com") ||
-    v.includes("costco.com") ||
-    v.includes("walmart.com") ||
-    v.includes("target.com") ||
-    v.includes("samsclub.com")
+    v.toLowerCase().includes("amazon.com") ||
+    isRetailUrl(v)
   );
 }
 
@@ -120,7 +119,7 @@ export function ScanPanel({ tier }: { tier: string }) {
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
         <input
           type="text"
-          placeholder="ASIN or Costco/Walmart/Target URL"
+          placeholder={`ASIN or ${RETAIL_STORE_HINT} URL`}
           value={asin}
           onChange={(e) => setAsin(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleScan()}

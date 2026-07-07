@@ -7,6 +7,8 @@
 
 import { runApifyActor } from "@/lib/apify/client";
 
+export { isRetailUrl } from "@/lib/retail/stores";
+
 export interface RetailProduct {
   storeName: string;
   storePrice: number;
@@ -26,6 +28,7 @@ type ScrapeAttempt = {
 
 type StoreConfig = {
   name: string;
+  domains: string[];
   buildAttempts: (url: string) => ScrapeAttempt[];
   pickItem: (items: Record<string, unknown>[], url: string) => Record<string, unknown> | null;
   parser: (item: Record<string, unknown>) => ParsedRetail | null;
@@ -39,6 +42,20 @@ const RESIDENTIAL_PROXY = {
 };
 
 const WALMART_EXTRACTOR = "khadinakbar~walmart-data-extractor";
+const ECOMMERCE_TOOL = "apify~e-commerce-scraping-tool";
+
+function buildEcommerceToolAttempt(url: string): ScrapeAttempt {
+  return {
+    actorId: ECOMMERCE_TOOL,
+    label: "ecommerce-detailsUrls",
+    input: {
+      scrapeMode: "AUTO",
+      detailsUrls: [{ url }],
+      maxProductResults: 1,
+      additionalProperties: false,
+    },
+  };
+}
 
 function parsePrice(...candidates: unknown[]): number | null {
   for (const candidate of candidates) {
@@ -197,9 +214,99 @@ function buildWalmartAttempts(url: string): ScrapeAttempt[] {
   return attempts;
 }
 
+export function walgreensProdIdFromUrl(url: string): string | null {
+  const match = url.match(/ID=(prod\d+)/i);
+  return match ? match[1].toLowerCase() : null;
+}
+
+function pickUrlMatchedItem(
+  items: Record<string, unknown>[],
+  url: string
+): Record<string, unknown> | null {
+  if (items.length === 0) return null;
+  const pathKey = url.replace(/^https?:\/\/[^/]+/i, "").split("?")[0].toLowerCase();
+  const matched = items.find((item) => {
+    const itemUrl = String(item.url ?? item.productUrl ?? item.productURL ?? "").toLowerCase();
+    if (!itemUrl) return false;
+    const itemPath = itemUrl.replace(/^https?:\/\/[^/]+/i, "").split("?")[0];
+    return itemPath.includes(pathKey) || pathKey.includes(itemPath);
+  });
+  return matched ?? items[0];
+}
+
+function pickWalgreensItem(
+  items: Record<string, unknown>[],
+  url: string
+): Record<string, unknown> | null {
+  if (items.length === 0) return null;
+  const prodId = walgreensProdIdFromUrl(url);
+  if (prodId) {
+    const exact = items.find((item) => {
+      const id = String(item.prodId ?? "").toLowerCase();
+      const productUrl = String(item.productURL ?? item.productUrl ?? "").toLowerCase();
+      return id === prodId || productUrl.includes(prodId);
+    });
+    if (exact) return exact;
+  }
+  return items[0];
+}
+
+function parseGenericRetailItem(item: Record<string, unknown>): ParsedRetail | null {
+  const product = item.product as Record<string, unknown> | undefined;
+  const offers = item.offers as Record<string, unknown> | undefined;
+  const priceObj = item.price as Record<string, unknown> | undefined;
+  const name = parseName(
+    item.name,
+    item.title,
+    item.product_name,
+    item.productName,
+    item.productDisplayName,
+    product?.title
+  );
+  const price = parsePrice(
+    offers?.price,
+    priceObj?.discounted_price,
+    priceObj?.regular_price,
+    item.price,
+    item.currentPrice,
+    item.salePrice,
+    item.regularPrice,
+    item.member_price,
+    item.memberPrice,
+    product?.price
+  );
+  const brandRaw = item.brand;
+  const brand =
+    typeof brandRaw === "string"
+      ? parseName(brandRaw)
+      : parseName((brandRaw as Record<string, unknown> | undefined)?.name) || undefined;
+  if (!name || price == null) return null;
+  return { name, price, brand: brand || undefined };
+}
+
+function parseWalgreensItem(item: Record<string, unknown>): ParsedRetail | null {
+  const priceInfo = item.priceInfo as Record<string, unknown> | undefined;
+  const rawUnit = item.unitPrice;
+  const unitNumeric =
+    typeof rawUnit === "number" ? rawUnit : Number(String(rawUnit ?? "").replace(/[^0-9.]/g, ""));
+  const name = parseName(item.productDisplayName, item.productName, item.subBrandName);
+  const price = parsePrice(
+    priceInfo?.regularPrice,
+    priceInfo?.salePrice,
+    item.listPrice,
+    item.salePrice,
+    item.price,
+    unitNumeric > 0 && unitNumeric < 1_000_000 ? unitNumeric : null
+  );
+  const brand = parseName(item.beautyCategoryName, item.subBrandName, item.brand) || undefined;
+  if (!name || price == null) return null;
+  return { name, price, brand };
+}
+
 const STORE_CONFIGS: StoreConfig[] = [
   {
     name: "Costco",
+    domains: ["costco.com"],
     buildAttempts: (url) => {
       const attempts: ScrapeAttempt[] = [];
       const searchQuery = costcoSearchQueryFromUrl(url);
@@ -244,12 +351,14 @@ const STORE_CONFIGS: StoreConfig[] = [
   },
   {
     name: "Walmart",
+    domains: ["walmart.com"],
     buildAttempts: buildWalmartAttempts,
     pickItem: pickWalmartItem,
     parser: parseWalmartItem,
   },
   {
     name: "Target",
+    domains: ["target.com"],
     buildAttempts: (url) => [
       {
         actorId: "parseforge~target-scraper",
@@ -273,15 +382,19 @@ const STORE_CONFIGS: StoreConfig[] = [
   },
   {
     name: "Sam's Club",
+    domains: ["samsclub.com"],
     buildAttempts: (url) => [
       {
         actorId: "kawsar~sam-s-club-product-scraper",
         label: "startUrls",
-        input: { maxItems: 1, startUrls: [{ url }] },
+        input: { maxItems: 1, startUrls: [{ url }], proxyConfiguration: RESIDENTIAL_PROXY },
       },
+      buildEcommerceToolAttempt(url),
     ],
-    pickItem: (items) => items[0] ?? null,
+    pickItem: pickUrlMatchedItem,
     parser: (item) => {
+      const parsed = parseGenericRetailItem(item);
+      if (parsed) return parsed;
       const name = parseName(item.product_name, item.name, item.title);
       const price = parsePrice(item.price, item.member_price, item.original_price);
       const brand = parseName(item.brand) || undefined;
@@ -289,19 +402,93 @@ const STORE_CONFIGS: StoreConfig[] = [
       return { name, price, brand };
     },
   },
+  {
+    name: "Walgreens",
+    domains: ["walgreens.com"],
+    buildAttempts: (url) => [
+      {
+        actorId: "mscraper~walgreens-scraper",
+        label: "startUrls",
+        input: {
+          startUrls: [{ url }],
+          proxy: {
+            useApifyProxy: true,
+            apifyProxyGroups: ["RESIDENTIAL"],
+            apifyProxyCountry: "US",
+          },
+          resultsLimit: 5,
+        },
+      },
+      buildEcommerceToolAttempt(url),
+    ],
+    pickItem: pickWalgreensItem,
+    parser: parseWalgreensItem,
+  },
+  {
+    name: "CVS",
+    domains: ["cvs.com"],
+    buildAttempts: (url) => [
+      {
+        actorId: "getdataforme~cvs-scraper",
+        label: "urls",
+        input: { urls: [url] },
+      },
+      buildEcommerceToolAttempt(url),
+    ],
+    pickItem: pickUrlMatchedItem,
+    parser: parseGenericRetailItem,
+  },
+  {
+    name: "Ulta",
+    domains: ["ulta.com"],
+    buildAttempts: (url) => [
+      {
+        actorId: "buseta~ulta-advanced-scraper",
+        label: "product-urls",
+        input: { scrape_type: "product", product_urls: [url] },
+      },
+      buildEcommerceToolAttempt(url),
+    ],
+    pickItem: pickUrlMatchedItem,
+    parser: parseGenericRetailItem,
+  },
+  {
+    name: "Home Depot",
+    domains: ["homedepot.com"],
+    buildAttempts: (url) => [
+      buildEcommerceToolAttempt(url),
+      {
+        actorId: "studio-amba~homedepot-scraper",
+        label: "categoryUrls",
+        input: {
+          categoryUrls: [{ url }],
+          maxResults: 1,
+          proxyConfiguration: RESIDENTIAL_PROXY,
+        },
+      },
+    ],
+    pickItem: pickUrlMatchedItem,
+    parser: parseGenericRetailItem,
+  },
+  {
+    name: "Best Buy",
+    domains: ["bestbuy.com"],
+    buildAttempts: (url) => [
+      {
+        actorId: "sovereigntaylor~bestbuy-scraper",
+        label: "productUrls",
+        input: { productUrls: [url], maxResults: 1 },
+      },
+      buildEcommerceToolAttempt(url),
+    ],
+    pickItem: pickUrlMatchedItem,
+    parser: parseGenericRetailItem,
+  },
 ];
 
 function detectStore(url: string): StoreConfig | null {
   const lower = url.toLowerCase();
-  if (lower.includes("costco.com")) return STORE_CONFIGS[0];
-  if (lower.includes("walmart.com")) return STORE_CONFIGS[1];
-  if (lower.includes("target.com")) return STORE_CONFIGS[2];
-  if (lower.includes("samsclub.com")) return STORE_CONFIGS[3];
-  return null;
-}
-
-export function isRetailUrl(url: string): boolean {
-  return detectStore(url) !== null;
+  return STORE_CONFIGS.find((store) => store.domains.some((domain) => lower.includes(domain))) ?? null;
 }
 
 export async function scrapeRetailProduct(url: string): Promise<RetailProduct | null> {
