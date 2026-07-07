@@ -7,7 +7,7 @@
 
 import { runApifyActor } from "@/lib/apify/client";
 import { encodeWalgreensProductUrl, walgreensProdIdFromUrl } from "@/lib/retail/stores";
-import { scrapeWalgreensDirect } from "@/lib/retail/direct-scrape";
+import { scrapeWalgreensDirect, scrapeJsonLdDirect } from "@/lib/retail/direct-scrape";
 
 export { isRetailUrl } from "@/lib/retail/stores";
 export { encodeWalgreensProductUrl, walgreensProdIdFromUrl } from "@/lib/retail/stores";
@@ -39,7 +39,8 @@ type StoreConfig = {
   parser: (item: Record<string, unknown>) => ParsedRetail | null;
 };
 
-const APIFY_TIMEOUT_SECS = 90;
+const APIFY_TIMEOUT_SECS = 100;
+const DEFAULT_MAX_ATTEMPTS = 3;
 
 const RESIDENTIAL_PROXY = {
   useApifyProxy: true,
@@ -48,6 +49,18 @@ const RESIDENTIAL_PROXY = {
 
 const WALMART_EXTRACTOR = "khadinakbar~walmart-data-extractor";
 const ECOMMERCE_TOOL = "apify~e-commerce-scraping-tool";
+const SCRAPEMINT = "scrapemint~ecommerce-scraper";
+
+function buildScrapemintAttempt(url: string): ScrapeAttempt {
+  return {
+    actorId: SCRAPEMINT,
+    label: "scrapemint-jsonld",
+    input: {
+      productUrls: [url],
+      proxyConfiguration: RESIDENTIAL_PROXY,
+    },
+  };
+}
 
 function buildEcommerceToolAttempt(url: string): ScrapeAttempt {
   return {
@@ -60,6 +73,79 @@ function buildEcommerceToolAttempt(url: string): ScrapeAttempt {
       additionalProperties: false,
     },
   };
+}
+
+function buildJsonLdWebScraperAttempt(url: string): ScrapeAttempt {
+  return {
+    actorId: "apify~web-scraper",
+    label: "web-scraper-jsonld",
+    input: {
+      startUrls: [{ url }],
+      maxRequestsPerCrawl: 1,
+      maxConcurrency: 1,
+      injectJQuery: true,
+      proxyConfiguration: RESIDENTIAL_PROXY,
+      pageFunction: `async function pageFunction(context) {
+        const $ = context.jQuery;
+        const products = [];
+        $('script[type="application/ld+json"]').each((_, el) => {
+          try {
+            const parsed = JSON.parse($(el).html() || 'null');
+            const blocks = Array.isArray(parsed) ? parsed : [parsed];
+            for (const block of blocks) {
+              if (!block) continue;
+              const type = block['@type'];
+              const types = Array.isArray(type) ? type : type ? [type] : [];
+              const nodes = types.some((t) => String(t).toLowerCase() === 'product')
+                ? [block]
+                : Array.isArray(block['@graph'])
+                  ? block['@graph'].filter((n) => {
+                      const nt = n && n['@type'];
+                      const nts = Array.isArray(nt) ? nt : nt ? [nt] : [];
+                      return nts.some((t) => String(t).toLowerCase() === 'product');
+                    })
+                  : [];
+              for (const node of nodes) {
+                const offers = node.offers;
+                const offer = Array.isArray(offers) ? offers[0] : offers;
+                const rawPrice = offer && (offer.price || offer.lowPrice || offer.highPrice);
+                const price = rawPrice != null ? parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) : null;
+                const name = node.name || node.title || '';
+                const brand = typeof node.brand === 'string' ? node.brand : node.brand && node.brand.name;
+                if (name && price > 0) products.push({ productName: String(name).trim(), price, brand });
+              }
+            }
+          } catch (_) {}
+        });
+        if (products.length > 0) return products[0];
+        const og = $('meta[property="og:title"]').attr('content') || '';
+        const h1 = $('h1').first().text().trim();
+        const title = (og.split('|')[0] || h1 || '').trim();
+        const bodyHtml = $('body').html() || '';
+        const priceMatch = bodyHtml.match(/\\$(\\d+\\.\\d{2})/);
+        const price = priceMatch ? parseFloat(priceMatch[1]) : null;
+        if (!title || !price) return null;
+        return { productName: title, price };
+      }`,
+    },
+  };
+}
+
+function finalizeAttempts(attempts: ScrapeAttempt[], url: string, max?: number): ScrapeAttempt[] {
+  const candidates = [
+    buildScrapemintAttempt(url),
+    ...attempts,
+    buildEcommerceToolAttempt(url),
+    buildJsonLdWebScraperAttempt(url),
+  ];
+  const seen = new Set<string>();
+  return candidates
+    .filter((attempt) => {
+      if (seen.has(attempt.label)) return false;
+      seen.add(attempt.label);
+      return true;
+    })
+    .slice(0, max ?? DEFAULT_MAX_ATTEMPTS);
 }
 
 function parsePrice(...candidates: unknown[]): number | null {
@@ -258,8 +344,9 @@ function parseGenericRetailItem(item: Record<string, unknown>): ParsedRetail | n
   const priceValue =
     priceObj && typeof priceObj.value === "number" ? priceObj.value : null;
   const name = parseName(
-    item.name,
     item.title,
+    item.Title,
+    item.name,
     item.product_name,
     item.productName,
     item.productDisplayName,
@@ -267,6 +354,7 @@ function parseGenericRetailItem(item: Record<string, unknown>): ParsedRetail | n
   );
   const price = parsePrice(
     priceValue,
+    typeof item.price === "number" ? item.price : null,
     offers?.price,
     priceObj?.discounted_price,
     priceObj?.regular_price,
@@ -320,6 +408,19 @@ function parseWalgreensItem(item: Record<string, unknown>): ParsedRetail | null 
   return { name, price, brand };
 }
 
+function parseRetailItem(
+  item: Record<string, unknown>,
+  storeParser: (item: Record<string, unknown>) => ParsedRetail | null
+): ParsedRetail | null {
+  return (
+    parseGenericRetailItem(item) ??
+    parseWebScraperItem(item) ??
+    parseWalgreensParserItem(item) ??
+    parseWalgreensItem(item) ??
+    storeParser(item)
+  );
+}
+
 function buildWalgreensWebScraperAttempt(url: string): ScrapeAttempt {
   const encoded = encodeWalgreensProductUrl(url);
   return {
@@ -356,15 +457,6 @@ function parseWebScraperItem(item: Record<string, unknown>): ParsedRetail | null
   return { name, price, brand: brand || undefined };
 }
 
-function parseWalgreensAnyItem(item: Record<string, unknown>): ParsedRetail | null {
-  return (
-    parseWebScraperItem(item) ??
-    parseWalgreensParserItem(item) ??
-    parseWalgreensItem(item) ??
-    parseGenericRetailItem(item)
-  );
-}
-
 const STORE_CONFIGS: StoreConfig[] = [
   {
     name: "Costco",
@@ -372,40 +464,18 @@ const STORE_CONFIGS: StoreConfig[] = [
     buildAttempts: (url) => {
       const attempts: ScrapeAttempt[] = [];
       const searchQuery = costcoSearchQueryFromUrl(url);
-
       if (searchQuery) {
-        attempts.push(
-          {
-            actorId: "parseforge~costco-scraper",
-            label: "search-residential",
-            input: { maxItems: 10, searchQuery, proxyConfiguration: RESIDENTIAL_PROXY },
-          },
-          {
-            actorId: "parseforge~costco-scraper",
-            label: "search-basic-proxy",
-            input: { maxItems: 10, searchQuery, proxyConfiguration: { useApifyProxy: true } },
-          }
-        );
+        attempts.push({
+          actorId: "parseforge~costco-scraper",
+          label: "costco-search",
+          input: { maxItems: 5, searchQuery, proxyConfiguration: RESIDENTIAL_PROXY },
+        });
       }
-
-      attempts.push(
-        {
-          actorId: "parseforge~costco-scraper",
-          label: "startUrls-string",
-          input: { maxItems: 5, startUrls: [url], proxyConfiguration: RESIDENTIAL_PROXY },
-        },
-        {
-          actorId: "parseforge~costco-scraper",
-          label: "startUrls-object",
-          input: { maxItems: 5, startUrls: [{ url }], proxyConfiguration: RESIDENTIAL_PROXY },
-        },
-        {
-          actorId: "parseforge~costco-scraper",
-          label: "startUrls-basic-proxy",
-          input: { maxItems: 5, startUrls: [url], proxyConfiguration: { useApifyProxy: true } },
-        }
-      );
-
+      attempts.push({
+        actorId: "parseforge~costco-scraper",
+        label: "costco-startUrls",
+        input: { maxItems: 3, startUrls: [{ url }], proxyConfiguration: RESIDENTIAL_PROXY },
+      });
       return attempts;
     },
     pickItem: pickCostcoItem,
@@ -424,13 +494,8 @@ const STORE_CONFIGS: StoreConfig[] = [
     buildAttempts: (url) => [
       {
         actorId: "parseforge~target-scraper",
-        label: "startUrls-string",
+        label: "target-startUrls",
         input: { maxItems: 1, startUrls: [url], includeDetails: true, proxyConfiguration: RESIDENTIAL_PROXY },
-      },
-      {
-        actorId: "parseforge~target-scraper",
-        label: "startUrls-object",
-        input: { maxItems: 1, startUrls: [{ url }], includeDetails: true, proxyConfiguration: RESIDENTIAL_PROXY },
       },
     ],
     pickItem: (items) => items[0] ?? null,
@@ -448,15 +513,12 @@ const STORE_CONFIGS: StoreConfig[] = [
     buildAttempts: (url) => [
       {
         actorId: "kawsar~sam-s-club-product-scraper",
-        label: "startUrls",
+        label: "sams-startUrls",
         input: { maxItems: 1, startUrls: [{ url }], proxyConfiguration: RESIDENTIAL_PROXY },
       },
-      buildEcommerceToolAttempt(url),
     ],
     pickItem: pickUrlMatchedItem,
     parser: (item) => {
-      const parsed = parseGenericRetailItem(item);
-      if (parsed) return parsed;
       const name = parseName(item.product_name, item.name, item.title);
       const price = parsePrice(item.price, item.member_price, item.original_price);
       const brand = parseName(item.brand) || undefined;
@@ -468,28 +530,9 @@ const STORE_CONFIGS: StoreConfig[] = [
     name: "Walgreens",
     domains: ["walgreens.com"],
     directScrape: scrapeWalgreensDirect,
-    maxApifyAttempts: 2,
-    buildAttempts: (url) => {
-      const encoded = encodeWalgreensProductUrl(url);
-      return [
-        {
-          actorId: "scrapemint~ecommerce-scraper",
-          label: "scrapemint-jsonld",
-          input: {
-            productUrls: [encoded],
-            proxyConfiguration: RESIDENTIAL_PROXY,
-          },
-        },
-        buildWalgreensWebScraperAttempt(url),
-        {
-          actorId: "getdataforme~walgreens-parser-spider",
-          label: "parser-spider",
-          input: { Urls: [encoded] },
-        },
-      ];
-    },
+    buildAttempts: (url) => [buildWalgreensWebScraperAttempt(url)],
     pickItem: pickWalgreensItem,
-    parser: parseWalgreensAnyItem,
+    parser: () => null,
   },
   {
     name: "CVS",
@@ -497,13 +540,12 @@ const STORE_CONFIGS: StoreConfig[] = [
     buildAttempts: (url) => [
       {
         actorId: "getdataforme~cvs-scraper",
-        label: "urls",
+        label: "cvs-urls",
         input: { urls: [url] },
       },
-      buildEcommerceToolAttempt(url),
     ],
     pickItem: pickUrlMatchedItem,
-    parser: parseGenericRetailItem,
+    parser: () => null,
   },
   {
     name: "Ulta",
@@ -511,22 +553,20 @@ const STORE_CONFIGS: StoreConfig[] = [
     buildAttempts: (url) => [
       {
         actorId: "buseta~ulta-advanced-scraper",
-        label: "product-urls",
+        label: "ulta-product-urls",
         input: { scrape_type: "product", product_urls: [url] },
       },
-      buildEcommerceToolAttempt(url),
     ],
     pickItem: pickUrlMatchedItem,
-    parser: parseGenericRetailItem,
+    parser: () => null,
   },
   {
     name: "Home Depot",
     domains: ["homedepot.com"],
     buildAttempts: (url) => [
-      buildEcommerceToolAttempt(url),
       {
         actorId: "studio-amba~homedepot-scraper",
-        label: "categoryUrls",
+        label: "homedepot-categoryUrls",
         input: {
           categoryUrls: [{ url }],
           maxResults: 1,
@@ -535,7 +575,7 @@ const STORE_CONFIGS: StoreConfig[] = [
       },
     ],
     pickItem: pickUrlMatchedItem,
-    parser: parseGenericRetailItem,
+    parser: () => null,
   },
   {
     name: "Best Buy",
@@ -543,13 +583,12 @@ const STORE_CONFIGS: StoreConfig[] = [
     buildAttempts: (url) => [
       {
         actorId: "sovereigntaylor~bestbuy-scraper",
-        label: "productUrls",
+        label: "bestbuy-productUrls",
         input: { productUrls: [url], maxResults: 1 },
       },
-      buildEcommerceToolAttempt(url),
     ],
     pickItem: pickUrlMatchedItem,
-    parser: parseGenericRetailItem,
+    parser: () => null,
   },
 ];
 
@@ -573,14 +612,14 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
     if (direct) return direct;
   }
 
-  const attempts = store.buildAttempts(cleanUrl).slice(0, store.maxApifyAttempts ?? undefined);
+  const attempts = finalizeAttempts(store.buildAttempts(cleanUrl), cleanUrl, store.maxApifyAttempts);
 
   for (let i = 0; i < attempts.length; i++) {
     const { actorId, input, label } = attempts[i];
     console.log(`[retail/scraper] ${store.name} attempt ${i + 1}/${attempts.length} (${label})`);
 
     const run = await runApifyActor<Record<string, unknown>>(actorId, input, {
-      timeoutSecs: i === 0 ? Math.max(APIFY_TIMEOUT_SECS, 120) : 90,
+      timeoutSecs: APIFY_TIMEOUT_SECS,
     });
 
     if (!run.ok) {
@@ -596,7 +635,7 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
     }
 
     for (const item of orderedItems) {
-      const parsed = store.parser(item);
+      const parsed = parseRetailItem(item, store.parser);
       if (!parsed) {
         continue;
       }
@@ -619,6 +658,9 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
       `[retail/scraper] ${label}: no parseable item for ${store.name} (${run.items.length} raw item(s))`
     );
   }
+
+  const jsonLdDirect = await scrapeJsonLdDirect(cleanUrl, store.name);
+  if (jsonLdDirect) return jsonLdDirect;
 
   console.error(`[retail/scraper] all ${attempts.length} attempt(s) failed for ${store.name}`);
   return null;
