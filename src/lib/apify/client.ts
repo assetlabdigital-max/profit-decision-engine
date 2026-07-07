@@ -41,23 +41,25 @@ function timeoutSignal(ms: number): AbortSignal {
  */
 export async function runApifyActor<T = Record<string, unknown>>(
   actorId: string,
-  input: Record<string, unknown>
+  input: Record<string, unknown>,
+  options?: { timeoutSecs?: number }
 ): Promise<ApifyRunResult<T>> {
   if (!isApifyEnabled()) {
     return { ok: false, error: "Apify disabled (no APIFY_API_TOKEN or FORCE_MOCK_APIFY=true)" };
   }
 
+  const timeoutSecs = options?.timeoutSecs ?? 90;
   const { apify } = getRuntimeConfig();
   const url = `${APIFY_BASE_URL}/acts/${encodeURIComponent(actorId)}/run-sync-get-dataset-items?token=${encodeURIComponent(
     apify.token as string
-  )}`;
+  )}&timeout=${timeoutSecs}`;
 
   try {
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
-      signal: timeoutSignal(APIFY_RUN_TIMEOUT_MS),
+      signal: timeoutSignal(timeoutSecs * 1000 + 10_000),
     });
 
     if (!response.ok) {

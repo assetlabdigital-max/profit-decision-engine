@@ -244,7 +244,13 @@ README2.md 보고 Stripe checkout E2E 가이드 써 줘
 3. Walmart/Target actor `dtrungtin~*` — Apify에서 404 (존재하지 않음)
 4. URL query string (`?DM_PersistentCookieCreated=...`) 그대로 전달
 
-**수정:** ✅ 커밋·push 완료 (이번 세션)
+**수정:** ✅ `a159e66` + follow-up (Costco search-first, Apify timeout param, Vercel maxDuration 120s)
+
+**추가 수정 (2차, 미배포):**
+- Apify `timeout=120` query param 누락 수정
+- Costco `/p/-/slug/id` → searchQuery 우선 시도
+- `startUrls` plain string 형식 + proxy fallback
+- `/api/scan` `maxDuration=120`, `vercel.json` functions 설정
 
 **배포 후 재테스트:**
 ```

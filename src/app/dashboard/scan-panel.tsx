@@ -147,7 +147,7 @@ export function ScanPanel({ tier }: { tier: string }) {
             opacity: !asin.trim() ? 0.5 : 1,
           }}
         >
-          {loading ? "Scanning..." : "Scan"}
+          {loading ? (isProductUrl(asin) ? "Scanning store… (up to 2 min)" : "Scanning...") : "Scan"}
         </button>
       </div>
 
