@@ -170,6 +170,48 @@ export async function scrapeJsonLdDirect(
   }
 }
 
+/** Generic direct scrape: JSON-LD first, then Open Graph / meta fallbacks. */
+export async function scrapeProductDirect(
+  url: string,
+  storeName: string
+): Promise<RetailProduct | null> {
+  const jsonLd = await scrapeJsonLdDirect(url, storeName);
+  if (jsonLd) return jsonLd;
+
+  try {
+    const response = await fetch(url, {
+      headers: BROWSER_HEADERS,
+      signal: AbortSignal.timeout(8_000),
+      cache: "no-store",
+    });
+
+    if (!response.ok) return null;
+
+    const html = await response.text();
+    const ogTitle = metaContent(html, "og:title");
+    const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1];
+    const productName = stripTags(ogTitle?.split("|")[0] ?? h1 ?? "");
+
+    const ogPrice = metaContent(html, "product:price:amount") ?? metaContent(html, "og:price:amount");
+    const priceMatch = html.match(/"price"\s*:\s*"?(\d+(?:\.\d{2})?)"?/i)?.[1];
+    const storePrice = parseUsd(ogPrice ?? undefined, priceMatch);
+
+    if (!productName || storePrice == null) return null;
+
+    console.log(`[retail/direct] ${storeName} meta: name="${productName}", price=${storePrice}`);
+
+    return {
+      storeName,
+      storePrice,
+      productName,
+      productUrl: url,
+      currency: "USD",
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function scrapeWalgreensDirect(url: string): Promise<RetailProduct | null> {
   const productUrl = encodeWalgreensProductUrl(url);
   const jsonLd = await scrapeJsonLdDirect(productUrl, "Walgreens");

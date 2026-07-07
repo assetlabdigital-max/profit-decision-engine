@@ -11,6 +11,7 @@ import {
   detectVariantMismatch,
   tokenOverlapScore,
 } from "@/lib/retail/match-quality";
+import { edgeCaseMatchPenalty } from "@/lib/retail/edge-cases";
 
 export interface AmazonMatch {
   asin: string;
@@ -66,6 +67,9 @@ export async function findAmazonMatch(
       const overlapScore = tokenOverlapScore(productName, title);
       const matchScore = retailAmazonMatchScore(productName, title);
       const variantMismatch = detectVariantMismatch(productName, title).mismatched;
+      const edgePenalty = edgeCaseMatchPenalty(productName, title);
+
+      if (edgePenalty < 0.12) continue;
 
       if (!best || matchScore > best.matchScore) {
         best = { asin, title, overlapScore, matchScore, variantMismatch };

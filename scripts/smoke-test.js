@@ -72,6 +72,14 @@ async function main() {
     await postJson("/api/stripe/checkout", { plan: "monthly" }, 401);
   });
 
+  await check("POST /api/scan retail URL unauthenticated → 401", async () => {
+    await postJson(
+      "/api/scan",
+      { productUrl: "https://www.target.com/p/eos-shea-better-body-lotion/-/A-12345678" },
+      401
+    );
+  });
+
   await check("POST /api/auth/request-link accepts email", async () => {
     const body = await postJson(
       "/api/auth/request-link",

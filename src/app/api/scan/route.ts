@@ -5,7 +5,9 @@ export const maxDuration = 300;
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { auth } from "@/auth/auth";
 import { resolveTier } from "@/lib/scan/resolve-tier";
+import { isScanRateLimited } from "@/lib/scan/rate-limit";
 import { runScan } from "@/lib/scan/run-scan";
 import { runRetailScan } from "@/lib/scan/run-retail-scan";
 import { isRetailUrl } from "@/lib/retail/scraper";
@@ -38,9 +40,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const { tier, userId, usedFallback } = await resolveTier();
 
-    // 소매점 URL이면 retail scan으로 분기
+    // 소매점 URL이면 retail scan으로 분기 (로그인 필수 — Apify 비용 보호)
     const inputUrl = parsed.data.productUrl ?? parsed.data.asin ?? "";
     if (inputUrl && isRetailUrl(inputUrl)) {
+      const session = await auth().catch(() => null);
+      if (!session?.user?.email) {
+        return jsonError(
+          "Sign in required to scan retail store URLs.",
+          "UNAUTHENTICATED",
+          401
+        );
+      }
+
+      const rate = await isScanRateLimited(userId, tier);
+      if (rate.limited) {
+        return jsonError(
+          `Scan limit reached (${rate.count}/${rate.limit} per hour). Try again later or upgrade to Pro.`,
+          "RATE_LIMITED",
+          429
+        );
+      }
+
       const { result, mock, fallbackReason, scrapeError } = await runRetailScan({
         retailUrl: inputUrl,
         cost: parsed.data.cost,

@@ -1,6 +1,6 @@
 "use client";
 
-export default function UpgradeButton({ email }: { email: string }) {
+export default function UpgradeButton() {
   async function handleUpgrade() {
     try {
       const res = await fetch("/api/stripe/checkout", {
@@ -8,18 +8,23 @@ export default function UpgradeButton({ email }: { email: string }) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ plan: "monthly" }),
       });
 
       const data = await res.json();
+
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
 
       if (!res.ok) {
         alert(data.error || "Unable to create Stripe checkout.");
         return;
       }
 
-      if (data.url) {
-        window.location.href = data.url;
+      if (data.data?.url) {
+        window.location.href = data.data.url;
         return;
       }
 

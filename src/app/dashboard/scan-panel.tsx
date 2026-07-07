@@ -44,6 +44,8 @@ interface ScanResult {
     isStoreExclusiveBrand?: boolean;
     variantMismatch?: boolean;
     titleOverlapScore?: number;
+    edgeCaseCodes?: string[];
+    hasBlockingEdgeCases?: boolean;
   };
 }
 
@@ -101,7 +103,11 @@ export function ScanPanel({ tier }: { tier: string }) {
 
       const json = await res.json();
 
-      if (!json.ok) {
+      if (!res.ok || !json.ok) {
+        if (res.status === 401) {
+          setError("Sign in required to scan retail store URLs.");
+          return;
+        }
         setError(json.error ?? "Scan failed");
         return;
       }
@@ -235,9 +241,9 @@ export function ScanPanel({ tier }: { tier: string }) {
   <div style={{
     marginBottom: 16,
     padding: 12,
-    background: result.retailArbitrage.matchConfidence === "low" || result.retailArbitrage.variantMismatch ? "#fffbeb" : "#f0fdf4",
+    background: result.retailArbitrage.matchConfidence === "low" || result.retailArbitrage.variantMismatch || result.retailArbitrage.hasBlockingEdgeCases ? "#fffbeb" : "#f0fdf4",
     borderRadius: 6,
-    border: `1px solid ${result.retailArbitrage.matchConfidence === "low" || result.retailArbitrage.variantMismatch ? "#fde68a" : "#bbf7d0"}`,
+    border: `1px solid ${result.retailArbitrage.matchConfidence === "low" || result.retailArbitrage.variantMismatch || result.retailArbitrage.hasBlockingEdgeCases ? "#fde68a" : "#bbf7d0"}`,
   }}>
     <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
       🛒 Retail Arbitrage
@@ -249,6 +255,11 @@ export function ScanPanel({ tier }: { tier: string }) {
       {result.retailArbitrage.variantMismatch && (
         <span style={{ marginLeft: 8, fontSize: 11, color: "#b45309", fontWeight: 500 }}>
           Variant mismatch
+        </span>
+      )}
+      {result.retailArbitrage.hasBlockingEdgeCases && (
+        <span style={{ marginLeft: 8, fontSize: 11, color: "#b45309", fontWeight: 500 }}>
+          Exception flags
         </span>
       )}
     </div>
@@ -282,6 +293,11 @@ export function ScanPanel({ tier }: { tier: string }) {
     <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
       Amazon: &quot;{result.retailArbitrage.amazonTitle.slice(0, 80)}{result.retailArbitrage.amazonTitle.length > 80 ? "…" : ""}&quot;
     </div>
+    {result.retailArbitrage.edgeCaseCodes && result.retailArbitrage.edgeCaseCodes.length > 0 && (
+      <div style={{ fontSize: 11, color: "#92400e", marginTop: 6 }}>
+        Flags: {result.retailArbitrage.edgeCaseCodes.join(", ")}
+      </div>
+    )}
     {result.retailArbitrage.matchWarnings?.map((warning) => (
       <p key={warning} style={{ margin: "8px 0 0", fontSize: 12, color: "#b45309" }}>
         ⚠️ {warning}

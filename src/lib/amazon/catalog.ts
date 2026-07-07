@@ -1,4 +1,5 @@
 import { spApiCall, isAmazonEnabled } from "@/lib/amazon/client";
+import { isApifyUsageLimitExceeded, runApifyActor } from "@/lib/apify/client";
 
 export interface AmazonProduct {
   asin: string;
@@ -11,59 +12,85 @@ export interface AmazonProduct {
   isMock: boolean;
 }
 
+async function fetchPriceFromSpApi(asin: string): Promise<{
+  price: number;
+  rating: number;
+  reviews: number;
+  category: string | null;
+} | null> {
+  try {
+    const marketplaceId = process.env.AMAZON_MARKETPLACE_ID || "ATVPDKIKX0DER";
+    const data = await spApiCall<any>(
+      `/products/pricing/v0/price?MarketplaceId=${marketplaceId}&ItemType=Asin&Asins=${asin}`
+    );
+
+    const payload = data?.payload?.[0];
+    const competitivePrices =
+      payload?.Product?.CompetitivePricing?.CompetitivePrices ?? [];
+
+    let amount: number | null = null;
+    for (const entry of competitivePrices) {
+      const listing = entry?.Price?.ListingPrice?.Amount ?? entry?.Price?.LandedPrice?.Amount;
+      const numeric = Number(listing);
+      if (Number.isFinite(numeric) && numeric > 0) {
+        amount = numeric;
+        break;
+      }
+    }
+
+    if (amount == null) {
+      return null;
+    }
+
+    console.log(`[amazon/sp-api] price=${amount} for ${asin}`);
+    return { price: amount, rating: 0, reviews: 0, category: null };
+  } catch (err) {
+    console.warn(`[amazon/sp-api] pricing failed for ${asin}:`, err);
+    return null;
+  }
+}
+
 async function fetchPriceFromApify(asin: string): Promise<{
   price: number;
   rating: number;
   reviews: number;
   category: string | null;
 } | null> {
-  const token = process.env.APIFY_API_TOKEN;
-  if (!token) return null;
+  if (isApifyUsageLimitExceeded()) return null;
+  if (process.env.AMAZON_PRICE_VIA_APIFY !== "true") return null;
 
-  try {
-    const res = await fetch(
-      `https://api.apify.com/v2/acts/dtrungtin~amazon-scraper/run-sync-get-dataset-items?token=${token}&timeout=60`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          startUrls: [{
-            url: `https://www.amazon.com/dp/${asin}`,
-            method: "GET"
-          }],
-          maxItems: 1,
-          proxyConfiguration: { useApifyProxy: true },
-        }),
-      }
-    );
+  const run = await runApifyActor<Record<string, unknown>>(
+    "dtrungtin~amazon-scraper",
+    {
+      startUrls: [{ url: `https://www.amazon.com/dp/${asin}`, method: "GET" }],
+      maxItems: 1,
+      proxyConfiguration: { useApifyProxy: true },
+    },
+    { timeoutSecs: 60 }
+  );
 
-    if (!res.ok) {
-      console.warn(`[amazon/apify] HTTP ${res.status} for ${asin}`);
-      return null;
-    }
-
-    const data = await res.json();
-    const item = Array.isArray(data) ? data[0] : null;
-    if (!item) return null;
-
-    const price = Number(
-  item.price ??
-  item.currentPrice ??
-  item.wasPrice ??
-  item.priceRange?.min ??
-  0
-);
-    const rating = Number(item.reviewRating ?? item.stars ?? item.rating ?? 0);
-    const reviews = Number(item.reviewCount ?? item.reviewsCount ?? item.reviews ?? 0);
-    const category = Array.isArray(item.categories) ? item.categories[0] : null;
-
-    console.log(`[amazon/apify] price=${price}, rating=${rating}, reviews=${reviews}, category=${category}`);
-
-    return { price, rating, reviews, category };
-  } catch (err) {
-    console.error(`[amazon/apify] failed for ${asin}:`, err);
+  if (!run.ok) {
+    console.warn(`[amazon/apify] failed for ${asin}: ${run.error}`);
     return null;
   }
+
+  const item = run.items[0];
+  if (!item) return null;
+
+  const price = Number(
+    item.price ??
+      item.currentPrice ??
+      item.wasPrice ??
+      (item.priceRange as { min?: number } | undefined)?.min ??
+      0
+  );
+  const rating = Number(item.reviewRating ?? item.stars ?? item.rating ?? 0);
+  const reviews = Number(item.reviewCount ?? item.reviewsCount ?? item.reviews ?? 0);
+  const category = Array.isArray(item.categories) ? String(item.categories[0]) : null;
+
+  console.log(`[amazon/apify] price=${price}, rating=${rating}, reviews=${reviews}, category=${category}`);
+
+  return { price, rating, reviews, category };
 }
 
 export async function getProductByAsin(asin: string): Promise<AmazonProduct | null> {
@@ -85,11 +112,14 @@ export async function getProductByAsin(asin: string): Promise<AmazonProduct | nu
     const title = summary.itemName ?? "Unknown Product";
     const brand = summary.brand ?? null;
 
-    const apifyData = await fetchPriceFromApify(asin);
-    const price = apifyData?.price ?? 0;
-    const rating = apifyData?.rating ?? 0;
-    const reviews = apifyData?.reviews ?? 0;
-    const category = apifyData?.category ?? summary.productType ?? "Unknown";
+    const spPrice = await fetchPriceFromSpApi(asin);
+    const apifyData = spPrice?.price ? null : await fetchPriceFromApify(asin);
+    const priceSource = spPrice ?? apifyData;
+
+    const price = priceSource?.price ?? 0;
+    const rating = priceSource?.rating ?? 0;
+    const reviews = priceSource?.reviews ?? 0;
+    const category = priceSource?.category ?? summary.productType ?? "Unknown";
 
     console.log(`[amazon/catalog] ${asin} — title: ${title}, price: ${price}, rating: ${rating}, reviews: ${reviews}`);
 

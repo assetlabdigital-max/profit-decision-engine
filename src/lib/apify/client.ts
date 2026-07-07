@@ -19,8 +19,18 @@
 
 import { isApifyEnabled, getRuntimeConfig } from "@/lib/runtime-config";
 
-const APIFY_RUN_TIMEOUT_MS = 90_000; // generous: scraping actors are slow
 const APIFY_BASE_URL = "https://api.apify.com/v2";
+
+/** Set when Apify returns HTTP 403 usage hard limit — callers should skip further runs. */
+let apifyUsageLimitExceeded = false;
+
+export function isApifyUsageLimitExceeded(): boolean {
+  return apifyUsageLimitExceeded;
+}
+
+export function markApifyUsageLimitExceeded(): void {
+  apifyUsageLimitExceeded = true;
+}
 
 export type ApifyRunResult<T> =
   | { ok: true; items: T[] }
@@ -65,6 +75,10 @@ export async function runApifyActor<T = Record<string, unknown>>(
     return { ok: false, error: "Apify disabled (no APIFY_API_TOKEN or FORCE_MOCK_APIFY=true)" };
   }
 
+  if (apifyUsageLimitExceeded) {
+    return { ok: false, error: "Apify monthly usage hard limit exceeded" };
+  }
+
   const timeoutSecs = options?.timeoutSecs ?? 90;
   const { apify } = getRuntimeConfig();
   // Apify actor paths use a literal tilde — encoding it breaks routing.
@@ -85,6 +99,7 @@ export async function runApifyActor<T = Record<string, unknown>>(
       const text = await response.text().catch(() => "<unreadable body>");
       const error = `Apify run failed: HTTP ${response.status} — ${text.slice(0, 300)}`;
       if (response.status === 403 && text.includes("usage hard limit")) {
+        markApifyUsageLimitExceeded();
         console.error("[apify] monthly usage hard limit exceeded — retail scans need a higher Apify quota or direct-scrape fallback");
       }
       return { ok: false, error };

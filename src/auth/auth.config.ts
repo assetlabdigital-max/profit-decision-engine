@@ -10,6 +10,10 @@ import { getRuntimeConfig } from "@/lib/runtime-config";
  * - CSRF / cookie / host 문제 전체 해결
  */
 
+const isProduction =
+  process.env.NODE_ENV === "production" ||
+  getRuntimeConfig().appUrl.startsWith("https://");
+
 export const authConfig: NextAuthConfig = {
   providers: [],
 
@@ -20,7 +24,7 @@ export const authConfig: NextAuthConfig = {
   /**
    * 🔥 핵심: CSRF / 쿠키 문제 해결
    */
-  useSecureCookies: false,
+  useSecureCookies: isProduction,
 
   pages: {
     signIn: "/login",
@@ -66,7 +70,7 @@ export const authConfig: NextAuthConfig = {
         httpOnly: true,
         sameSite: "lax",
         path: "/",
-        secure: false,
+        secure: isProduction,
       },
     },
 
@@ -76,7 +80,7 @@ export const authConfig: NextAuthConfig = {
         httpOnly: true,
         sameSite: "lax",
         path: "/",
-        secure: false,
+        secure: isProduction,
       },
     },
   },

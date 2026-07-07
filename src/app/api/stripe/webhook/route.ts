@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getRuntimeConfig } from "@/lib/runtime-config";
-import { tryClaimStripeEvent, upgradeUserToPro } from "@/lib/db/users";
+import { tryClaimStripeEvent, upgradeUserToPro, getUserByStripeCustomerId, upsertStripeSubscription } from "@/lib/db/users";
 
 const stripe = new Stripe(getRuntimeConfig().stripe.secretKey!, {
   apiVersion: "2024-06-20",
@@ -68,6 +68,49 @@ export async function POST(req: Request) {
       }
     } catch (err) {
       console.error("[stripe/webhook] runtime error:", err);
+    }
+  }
+
+  if (
+    event.type === "customer.subscription.deleted" ||
+    event.type === "customer.subscription.updated"
+  ) {
+    try {
+      const subscription = event.data.object as Stripe.Subscription;
+      const customerId =
+        typeof subscription.customer === "string"
+          ? subscription.customer
+          : subscription.customer?.id ?? "";
+
+      if (!customerId) {
+        console.error("[stripe/webhook] subscription event missing customer id");
+        return NextResponse.json({ received: true });
+      }
+
+      const { user } = await getUserByStripeCustomerId(customerId);
+      if (!user) {
+        console.warn(`[stripe/webhook] no user for Stripe customer ${customerId}`);
+        return NextResponse.json({ received: true });
+      }
+
+      const activeStatuses = new Set(["active", "trialing"]);
+      const tier = activeStatuses.has(subscription.status) ? "pro" : "free";
+
+      const result = await upsertStripeSubscription({
+        email: user.email,
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscription.id,
+        status: subscription.status,
+        tier,
+      });
+
+      if (result.ok) {
+        console.log(
+          `[stripe/webhook] ${user.email} subscription ${subscription.status} → tier=${tier}`
+        );
+      }
+    } catch (err) {
+      console.error("[stripe/webhook] subscription lifecycle error:", err);
     }
   }
 

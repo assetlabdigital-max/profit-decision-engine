@@ -12,6 +12,9 @@ export interface RetailArbitrageInfo {
   isStoreExclusiveBrand?: boolean;
   variantMismatch?: boolean;
   titleOverlapScore?: number;
+  /** Machine-readable exception codes detected during matching. */
+  edgeCaseCodes?: string[];
+  hasBlockingEdgeCases?: boolean;
 }
 
 /** REQUEST */

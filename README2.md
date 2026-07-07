@@ -1,7 +1,7 @@
 # Profit Decision Engine — 인수인계 문서
 
-> **마지막 업데이트:** 2026-07-07 15:45 (Cursor 로컬, Agent 모드)  
-> **최신 커밋:** `e787ca8` — variant mismatch 감지  
+> **마지막 업데이트:** 2026-07-07 17:30 (Cursor 로컬, Agent 모드)  
+> **최신 커밋 (로컬, 미푸시):** Apify 없이 가능한 P0–P2 업그레이드 일괄 적용  
 > **목적:** 토큰 제한·계정 전환 시 다음 세션에서 바로 이어서 작업할 수 있도록 현재 상태를 기록합니다.  
 > **규칙:** 이 파일은 작업할 때마다 **항상** 최신 상태로 업데이트한다 (별도 명령 불필요).
 
@@ -9,14 +9,52 @@
 
 ## ⚠️ 세션 중단점 — 다음 계정이 여기서 시작
 
-**이번 세션:** Walgreens·CVS·Ulta·Home Depot·Best Buy retail URL 지원 추가 (Sam's Club proxy 개선).
+**이번 세션:** Apify 크레딧 없이 가능한 모든 코드 업그레이드 완료 + 유료 Apify 전환 준비도 기술 판정.
 
 | 항목 | 상태 | 비고 |
 |------|------|------|
-| 9개 소매점 URL 스캔 | ✅ 코드 완료 | `stores.ts` + `scraper.ts` Apify actors |
-| Walgreens 프로덕션 재테스트 | ⏳ push 후 | Nice! purified water URL |
+| Apify 월간 한도 초과 | 🔴 프로덕션 차단 | `HTTP 403 usage hard limit` — 모든 retail Apify 시도 즉시 실패 |
+| Retail 스캔 인증 게이트 | ✅ | `/api/scan` retail URL → 로그인 필수 (401) |
+| Retail 스캔 rate limit | ✅ | free 10/h, pro 50/h (`scan_history` 기준) |
+| Retail scrape 캐시 | ✅ | `migrations/004_retail_scrape_cache.sql` (24h TTL) — **DB migrate 필요** |
+| Direct scrape (9 stores) | ✅ | JSON-LD + OG/meta fallback, Apify 전 시도 |
+| Amazon 가격 | ✅ | SP-API pricing 우선, Apify는 `AMAZON_PRICE_VIA_APIFY=true`일 때만 |
+| 가격 sanity 검증 | ✅ | store vs Amazon 비율 이상 시 SKIP + warning |
+| **예외 상황 엔진** | ✅ | `edge-cases.ts` — 20+ 패턴 (pack/scent/volume/색상/리퍼/번들 등) |
+| Stripe 구독 lifecycle | ✅ | `subscription.updated` / `deleted` → tier 동기화 |
+| Checkout UX | ✅ | success/cancel 배너, UpgradeButton payload 수정 |
+| CI | ✅ | `.github/workflows/ci.yml` (typecheck + match-quality + build) |
 
-**다음 세션 첫 작업 (push·재테스트 완료 후):**
+**유료 Apify 전환 판정: 아직 NO (기술적으로)**
+
+| 준비됨 | 미완 / 차단 |
+|--------|-------------|
+| 방어적 mock 아키텍처, variant mismatch, 9-store 코드 | 5/9 store 라이브 검증 미완 (CVS, Ulta, HD, BB, Walgreens) |
+| Auth + rate limit + cache로 비용 통제 기반 마련 | Target 가격 품질 이슈 ($35 vs 실제 $8–12) — sanity는 경고만 |
+| SP-API로 ASIN 스캔 Apify 의존 제거 | Apify 복구 후 Costco/Walgreens/CVS 재테스트 필요 |
+| Stripe checkout + webhook 확장 | Stripe checkout E2E 수동 테스트 미완 |
+
+**권장 순서 (Apify 크레딧 복구 또는 유료 전환 후):**
+1. `npm run db:migrate` — `004_retail_scrape_cache.sql` 적용
+2. Target / Costco / Walgreens URL 프로덕션 재테스트 (`mock: false` 확인)
+3. `npm run smoke -- https://www.profit-decision-engine.com` (6 checks)
+4. Stripe checkout E2E 수동 테스트
+5. **그때** Apify 유료 플랜 검토 (월 $5 free는 검증용으로만)
+
+**Apify 크레딧 없을 때 사용자 선택:** 다음 달 $5 크레딧 리셋 대기 OR 제품 검증 완료 후 유료 전환.
+
+---
+
+## ⚠️ (이전 세션 기록)
+
+**Walgreens·CVS·Ulta·HD·BB 추가 세션** — 코드는 위 표에 통합 반영됨.
+
+| 항목 | 상태 | 비고 |
+|------|------|------|
+| 9개 소매점 URL 스캔 | ✅ 코드 완료 | direct-scrape → Apify chain |
+| Walgreens 프로덕션 재테스트 | ⏳ Apify 한도로 보류 | Nice! purified water URL |
+
+**다음 세션 첫 작업 (Apify 복구 후):**
 1. eos Beach Waves URL 프로덕션 결과 확인 (`variantMismatch: true`, confidence `low`, SKIP)
 2. Stripe checkout E2E 수동 테스트
 3. TikTok Apify refresh 수동 테스트
@@ -44,7 +82,7 @@ Amazon 셀러용 BUY / SKIP / RISK 의사결정 SaaS. Next.js 14 + TypeScript. S
 | 7 | `git push origin main` | ✅ | `origin/main`과 동기화 완료 |
 | 8 | Vercel 프로젝트 연결 | ✅ | `profit-engine1/profit-decision-engine`, 로컬 `vercel link` 완료 |
 | 9 | 프로덕션 health 검증 | ✅ | db/stripe/email/apify 전부 `live`, warnings `[]` |
-| 10 | E2E smoke test 스크립트 | ✅ | `scripts/smoke-test.js` + `npm run smoke` (5/5 통과) |
+| 10 | E2E smoke test 스크립트 | ✅ | `scripts/smoke-test.js` + `npm run smoke` (6 checks: retail 401 포함) |
 
 **커밋:** `90c3b88` — **7~10번 변경은 워킹 트리에만 있음, 아직 push 안 됨**
 
@@ -53,8 +91,11 @@ Amazon 셀러용 BUY / SKIP / RISK 의사결정 SaaS. Next.js 14 + TypeScript. S
 ## 2. 빌드·테스트 검증
 
 ```bash
-npm run build   # ✅ 2026-07-07 성공
-npm run smoke   # ✅ 2026-07-07 로컬 5/5 통과
+npm run build          # ✅ 2026-07-07 성공
+npm run typecheck      # ✅
+npm run test:match-quality  # ✅ 4+ assertions
+npm run smoke          # ✅ 로컬 6/6 (retail auth gate 포함)
+npm run db:migrate     # ⏳ 004_retail_scrape_cache.sql 적용 필요
 ```
 
 프로덕션 smoke (선택):
@@ -68,11 +109,12 @@ npm run smoke -- https://www.profit-decision-engine.com
 
 | 우선순위 | 작업 | 비고 |
 |----------|------|------|
-| **P0** | — | Costco retail URL fix **완료** (`a588fc6`) |
-| P1 | 프로덕션 smoke | `npm run smoke -- https://www.profit-decision-engine.com` (**미실행**) |
-| P2 | Stripe checkout E2E (수동) | 로그인 → pricing → checkout → webhook → Pro tier 확인 |
+| **P0** | `npm run db:migrate` | `004_retail_scrape_cache.sql` 프로덕션 적용 |
+| **P0** | Apify 크레딧 복구 후 retail 재테스트 | Target, Costco, Walgreens, CVS |
+| P1 | 프로덕션 smoke | `npm run smoke -- https://www.profit-decision-engine.com` |
+| P2 | Stripe checkout E2E (수동) | 로그인 → pricing → checkout → webhook → Pro tier |
 | P3 | TikTok Apify refresh (수동) | 대시보드 버튼 → 캐시 적재 확인 |
-| P4 | (선택) Cron route 추가 | `CRON_SECRET` 보호 `/api/cron/*` + `vercel.json` crons |
+| P4 | Apify 유료 전환 | 위 P0–P2 통과 후에만 권장 |
 
 ---
 

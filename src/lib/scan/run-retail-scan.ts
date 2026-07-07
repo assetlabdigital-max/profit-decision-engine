@@ -107,16 +107,6 @@ export async function runRetailScan({
     return { result: base, mock: true, fallbackReason: "amazon_match_failed" };
   }
 
-  const quality = assessRetailMatchQuality(
-    retailProduct,
-    amazonMatch.title,
-    amazonMatch.confidence
-  );
-
-  console.log(
-    `[retail-scan] Amazon match: ${amazonMatch.asin} — confidence=${quality.confidence}, overlap=${quality.overlapScore.toFixed(2)}`
-  );
-
   const { result, mock } = await runScan({
     request: {
       asin: amazonMatch.asin,
@@ -126,6 +116,17 @@ export async function runRetailScan({
     userId,
   });
 
+  const qualityWithPrices = assessRetailMatchQuality(
+    retailProduct,
+    amazonMatch.title,
+    amazonMatch.confidence,
+    result.price > 0 ? result.price : undefined
+  );
+
+  console.log(
+    `[retail-scan] Amazon match: ${amazonMatch.asin} — confidence=${qualityWithPrices.confidence}, overlap=${qualityWithPrices.overlapScore.toFixed(2)}, edgeCases=${qualityWithPrices.edgeCaseCodes?.length ?? 0}`
+  );
+
   const withArbitrage = {
     ...result,
     retailArbitrage: {
@@ -133,16 +134,18 @@ export async function runRetailScan({
       storePrice: retailProduct.storePrice,
       storeProductName: retailProduct.productName,
       amazonTitle: amazonMatch.title,
-      matchConfidence: quality.confidence,
-      matchWarnings: quality.warnings,
-      storeBrand: quality.storeBrandLabel,
-      isStoreExclusiveBrand: quality.isStoreExclusiveBrand,
-      variantMismatch: quality.variantMismatch,
-      titleOverlapScore: quality.overlapScore,
+      matchConfidence: qualityWithPrices.confidence,
+      matchWarnings: qualityWithPrices.warnings,
+      storeBrand: qualityWithPrices.storeBrandLabel,
+      isStoreExclusiveBrand: qualityWithPrices.isStoreExclusiveBrand,
+      variantMismatch: qualityWithPrices.variantMismatch,
+      titleOverlapScore: qualityWithPrices.overlapScore,
+      edgeCaseCodes: qualityWithPrices.edgeCaseCodes,
+      hasBlockingEdgeCases: qualityWithPrices.hasBlockingEdgeCases,
     },
   };
 
-  const finalResult = applyRetailQualityGuards(withArbitrage, quality);
+  const finalResult = applyRetailQualityGuards(withArbitrage, qualityWithPrices);
 
   return { result: finalResult, mock, fallbackReason: null };
 }

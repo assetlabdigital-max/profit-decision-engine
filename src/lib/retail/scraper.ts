@@ -5,8 +5,9 @@
  * product name + price using Apify actors.
  */
 
-import { runApifyActor } from "@/lib/apify/client";
-import { scrapeWalgreensDirect, scrapeJsonLdDirect } from "@/lib/retail/direct-scrape";
+import { runApifyActor, isApifyUsageLimitExceeded } from "@/lib/apify/client";
+import { scrapeWalgreensDirect, scrapeJsonLdDirect, scrapeProductDirect } from "@/lib/retail/direct-scrape";
+import { getCachedRetailProduct, setCachedRetailProduct } from "@/lib/retail/cache";
 import { encodeWalgreensProductUrl, walgreensProdIdFromUrl } from "@/lib/retail/stores";
 import type { RetailProduct } from "@/lib/retail/types";
 
@@ -357,37 +358,24 @@ const STORE_CONFIGS: StoreConfig[] = [
   {
     name: "Costco",
     domains: ["costco.com"],
+    directScrape: (url) => scrapeProductDirect(url, "Costco"),
     buildAttempts: (url) => {
       const attempts: ScrapeAttempt[] = [];
       const searchQuery = costcoSearchQueryFromUrl(url);
 
       if (searchQuery) {
-        attempts.push(
-          {
-            actorId: "parseforge~costco-scraper",
-            label: "search-residential",
-            input: { maxItems: 10, searchQuery, proxyConfiguration: RESIDENTIAL_PROXY },
-          },
-          {
-            actorId: "parseforge~costco-scraper",
-            label: "search-basic-proxy",
-            input: { maxItems: 10, searchQuery, proxyConfiguration: { useApifyProxy: true } },
-          }
-        );
+        attempts.push({
+          actorId: "parseforge~costco-scraper",
+          label: "search-residential",
+          input: { maxItems: 10, searchQuery, proxyConfiguration: RESIDENTIAL_PROXY },
+        });
       }
 
-      attempts.push(
-        {
-          actorId: "parseforge~costco-scraper",
-          label: "startUrls-string",
-          input: { maxItems: 5, startUrls: [url], proxyConfiguration: RESIDENTIAL_PROXY },
-        },
-        {
-          actorId: "parseforge~costco-scraper",
-          label: "startUrls-object",
-          input: { maxItems: 5, startUrls: [{ url }], proxyConfiguration: RESIDENTIAL_PROXY },
-        }
-      );
+      attempts.push({
+        actorId: "parseforge~costco-scraper",
+        label: "startUrls-object",
+        input: { maxItems: 5, startUrls: [{ url }], proxyConfiguration: RESIDENTIAL_PROXY },
+      });
 
       return attempts;
     },
@@ -397,6 +385,7 @@ const STORE_CONFIGS: StoreConfig[] = [
   {
     name: "Walmart",
     domains: ["walmart.com"],
+    directScrape: (url) => scrapeProductDirect(url, "Walmart"),
     buildAttempts: buildWalmartAttempts,
     pickItem: pickWalmartItem,
     parser: parseWalmartItem,
@@ -404,6 +393,7 @@ const STORE_CONFIGS: StoreConfig[] = [
   {
     name: "Target",
     domains: ["target.com"],
+    directScrape: (url) => scrapeProductDirect(url, "Target"),
     buildAttempts: (url) => [
       {
         actorId: "parseforge~target-scraper",
@@ -422,6 +412,7 @@ const STORE_CONFIGS: StoreConfig[] = [
   {
     name: "Sam's Club",
     domains: ["samsclub.com"],
+    directScrape: (url) => scrapeProductDirect(url, "Sam's Club"),
     buildAttempts: (url) => [
       {
         actorId: "kawsar~sam-s-club-product-scraper",
@@ -447,6 +438,7 @@ const STORE_CONFIGS: StoreConfig[] = [
   {
     name: "CVS",
     domains: ["cvs.com"],
+    directScrape: (url) => scrapeProductDirect(url, "CVS"),
     buildAttempts: newStoreAttempts,
     pickItem: pickUrlMatchedItem,
     parser: parseUniversalItem,
@@ -454,6 +446,7 @@ const STORE_CONFIGS: StoreConfig[] = [
   {
     name: "Ulta",
     domains: ["ulta.com"],
+    directScrape: (url) => scrapeProductDirect(url, "Ulta"),
     buildAttempts: newStoreAttempts,
     pickItem: pickUrlMatchedItem,
     parser: parseUniversalItem,
@@ -461,6 +454,7 @@ const STORE_CONFIGS: StoreConfig[] = [
   {
     name: "Home Depot",
     domains: ["homedepot.com"],
+    directScrape: (url) => scrapeProductDirect(url, "Home Depot"),
     buildAttempts: newStoreAttempts,
     pickItem: pickUrlMatchedItem,
     parser: parseUniversalItem,
@@ -468,6 +462,7 @@ const STORE_CONFIGS: StoreConfig[] = [
   {
     name: "Best Buy",
     domains: ["bestbuy.com"],
+    directScrape: (url) => scrapeProductDirect(url, "Best Buy"),
     buildAttempts: newStoreAttempts,
     pickItem: pickUrlMatchedItem,
     parser: parseUniversalItem,
@@ -496,6 +491,13 @@ function parseItem(
   return parseUniversalItem(item) ?? storeParser(item);
 }
 
+async function finalizeRetailProduct(product: RetailProduct): Promise<RetailProduct> {
+  await setCachedRetailProduct(product).catch((err) => {
+    console.warn("[retail/scraper] cache write failed (non-fatal):", err);
+  });
+  return product;
+}
+
 export async function scrapeRetailProduct(url: string): Promise<RetailProduct | null> {
   const cleanUrl = normalizeRetailUrl(url);
   const store = detectStore(cleanUrl);
@@ -507,13 +509,25 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
   console.log(`[retail/scraper] scraping ${store.name} URL: ${cleanUrl}`);
   lastRetailScrapeError = null;
 
+  const cached = await getCachedRetailProduct(cleanUrl);
+  if (cached?.product) {
+    console.log(`[retail/scraper] cache hit for ${store.name}: "${cached.product.productName}"`);
+    return cached.product;
+  }
+
   if (store.directScrape) {
     const direct = await store.directScrape(cleanUrl);
-    if (direct) return direct;
+    if (direct) return finalizeRetailProduct(direct);
   }
 
   const jsonLdEarly = await scrapeJsonLdDirect(cleanUrl, store.name);
-  if (jsonLdEarly) return jsonLdEarly;
+  if (jsonLdEarly) return finalizeRetailProduct(jsonLdEarly);
+
+  if (isApifyUsageLimitExceeded()) {
+    lastRetailScrapeError = "Apify monthly usage hard limit exceeded";
+    console.warn(`[retail/scraper] Apify quota exhausted — skipping Apify for ${store.name}`);
+    return null;
+  }
 
   const attempts = store.buildAttempts(cleanUrl);
 
@@ -550,14 +564,14 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
         `[retail/scraper] ${store.name} via ${label}: name="${parsed.name}", price=${parsed.price}`
       );
 
-      return {
+      return finalizeRetailProduct({
         storeName: store.name,
         storePrice: parsed.price,
         productName: parsed.name,
         productUrl: cleanUrl,
         currency: "USD",
         brand: parsed.brand,
-      };
+      });
     }
 
     console.warn(
@@ -566,7 +580,7 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
   }
 
   const jsonLd = await scrapeJsonLdDirect(cleanUrl, store.name);
-  if (jsonLd) return jsonLd;
+  if (jsonLd) return finalizeRetailProduct(jsonLd);
 
   console.error(`[retail/scraper] all ${attempts.length} attempt(s) failed for ${store.name}`);
   if (!lastRetailScrapeError) {

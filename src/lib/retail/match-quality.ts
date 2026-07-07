@@ -5,27 +5,18 @@
  */
 
 import type { RetailProduct } from "@/lib/retail/types";
-
-/** Brands sold only (or primarily) at one retailer — unlikely to have a 1:1 Amazon listing. */
-const STORE_EXCLUSIVE_BRANDS: Record<string, string[]> = {
-  Target: [
-    "all in motion",
-    "good & gather",
-    "good and gather",
-    "up & up",
-    "up and up",
-    "cat & jack",
-    "wild fable",
-    "universal thread",
-    "a new day",
-    "shade & shore",
-  ],
-  Costco: ["kirkland signature", "kirkland"],
-  Walmart: ["great value", "mainstays", "bettergoods", "equate"],
-  "Sam's Club": ["member's mark", "members mark"],
-  Walgreens: ["nice!", "nice", "walgreens brand"],
-  CVS: ["cvs health", "gold emblem", "live better"],
-};
+import {
+  normalizeText,
+  extractPackCount,
+  significantTokens,
+} from "@/lib/retail/title-parse";
+import {
+  assessRetailEdgeCases,
+  edgeCasesToWarnings,
+  edgeCaseMatchPenalty,
+  detectPriceEdgeCases,
+  type RetailEdgeCaseCode,
+} from "@/lib/retail/edge-cases";
 
 const STOP_WORDS = new Set([
   "a", "an", "the", "and", "or", "for", "with", "in", "on", "of", "to", "by",
@@ -54,25 +45,11 @@ export interface VariantMismatchResult {
   amazonDistinctive: string[];
 }
 
-function normalizeText(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^\w\s&-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function significantTokens(value: string): Set<string> {
-  return new Set(
-    normalizeText(value)
-      .split(" ")
-      .filter((t) => t.length > 2 && !STOP_WORDS.has(t))
-  );
-}
+export { extractPackCount } from "@/lib/retail/title-parse";
 
 export function tokenOverlapScore(a: string, b: string): number {
-  const tokensA = significantTokens(a);
-  const tokensB = significantTokens(b);
+  const tokensA = significantTokens(a, STOP_WORDS);
+  const tokensB = significantTokens(b, STOP_WORDS);
   if (tokensA.size === 0 || tokensB.size === 0) return 0;
 
   let shared = 0;
@@ -83,31 +60,10 @@ export function tokenOverlapScore(a: string, b: string): number {
   return shared / Math.max(tokensA.size, tokensB.size);
 }
 
-/** Parse multi-pack from title (default single item = 1). */
-export function extractPackCount(title: string): number {
-  const norm = normalizeText(title);
-
-  const explicit = norm.match(/(\d+)\s*pack\b/);
-  if (explicit) return Math.max(1, parseInt(explicit[1], 10));
-
-  if (/\b(twin|duo|double)\s+pack\b/.test(norm) || /\b2\s+pack\b/.test(norm)) return 2;
-  if (/\b3\s+pack\b/.test(norm) || /\btriple\s+pack\b/.test(norm)) return 3;
-  if (/\b4\s+pack\b/.test(norm)) return 4;
-
-  if (/\bset\s+of\s+(\d+)\b/.test(norm)) {
-    const m = norm.match(/\bset\s+of\s+(\d+)\b/);
-    if (m) return Math.max(1, parseInt(m[1], 10));
-  }
-
-  if (/\bvariety\s+pack\b/.test(norm) || /\bassorted\b/.test(norm)) return 2;
-
-  return 1;
-}
-
 /** Tokens that distinguish scent/color/style — present in one title but not the other. */
 function distinctiveVariantTokens(title: string, otherTitle: string): string[] {
-  const tokens = significantTokens(title);
-  const other = significantTokens(otherTitle);
+  const tokens = significantTokens(title, STOP_WORDS);
+  const other = significantTokens(otherTitle, STOP_WORDS);
   const distinctive: string[] = [];
 
   for (const token of tokens) {
@@ -167,12 +123,13 @@ export function detectVariantMismatch(
   };
 }
 
-/** Score for ranking Amazon search hits — penalize variant mismatches. */
+/** Score for ranking Amazon search hits — penalize variant + edge-case mismatches. */
 export function retailAmazonMatchScore(retailTitle: string, amazonTitle: string): number {
   const overlap = tokenOverlapScore(retailTitle, amazonTitle);
   const variant = detectVariantMismatch(retailTitle, amazonTitle);
-  if (variant.mismatched) return overlap * 0.35;
-  return overlap;
+  const edgePenalty = edgeCaseMatchPenalty(retailTitle, amazonTitle);
+  if (variant.mismatched) return overlap * 0.35 * edgePenalty;
+  return overlap * edgePenalty;
 }
 
 export function detectStoreExclusiveBrand(
@@ -181,9 +138,17 @@ export function detectStoreExclusiveBrand(
   scrapedBrand?: string
 ): { isExclusive: boolean; brandLabel: string | null } {
   const haystack = normalizeText([scrapedBrand, productName].filter(Boolean).join(" "));
-  const brands = STORE_EXCLUSIVE_BRANDS[storeName] ?? [];
+  const brands: Record<string, string[]> = {
+    Target: ["all in motion", "good & gather", "good and gather", "up & up", "up and up"],
+    Costco: ["kirkland signature", "kirkland"],
+    Walmart: ["great value", "mainstays", "bettergoods", "equate"],
+    "Sam's Club": ["member's mark", "members mark"],
+    Walgreens: ["nice!", "nice", "walgreens brand"],
+    CVS: ["cvs health", "gold emblem", "live better"],
+  };
+  const list = brands[storeName] ?? [];
 
-  for (const brand of brands) {
+  for (const brand of list) {
     if (haystack.includes(brand)) {
       return { isExclusive: true, brandLabel: brand };
     }
@@ -194,7 +159,7 @@ export function detectStoreExclusiveBrand(
 
 export function amazonBrandAppearsInRetailTitle(amazonTitle: string, retailTitle: string): boolean {
   const amazonNorm = normalizeText(amazonTitle);
-  const retailTokens = [...significantTokens(retailTitle)];
+  const retailTokens = [...significantTokens(retailTitle, STOP_WORDS)];
 
   const amazonLead = amazonNorm.split(" ").slice(0, 3).join(" ");
   if (amazonLead.length > 3 && normalizeText(retailTitle).includes(amazonLead)) {
@@ -205,6 +170,30 @@ export function amazonBrandAppearsInRetailTitle(amazonTitle: string, retailTitle
   return retailTokens.some((t) => t === amazonBrandGuess);
 }
 
+export function assessRetailPriceSanity(
+  storePrice: number,
+  amazonPrice?: number
+): string[] {
+  return edgeCasesToWarnings(detectPriceEdgeCases(storePrice, amazonPrice));
+}
+
+export function applyPriceSanityToQuality(
+  quality: RetailMatchQuality,
+  storePrice: number,
+  amazonPrice?: number
+): RetailMatchQuality {
+  const priceWarnings = assessRetailPriceSanity(storePrice, amazonPrice);
+  if (priceWarnings.length === 0) return quality;
+
+  return {
+    ...quality,
+    warnings: [...quality.warnings, ...priceWarnings],
+    confidence: "low",
+    profitAnalysisReliable: false,
+    hasBlockingEdgeCases: true,
+  };
+}
+
 export interface RetailMatchQuality {
   confidence: "high" | "medium" | "low";
   overlapScore: number;
@@ -213,43 +202,38 @@ export interface RetailMatchQuality {
   variantMismatch: boolean;
   profitAnalysisReliable: boolean;
   warnings: string[];
+  edgeCaseCodes?: RetailEdgeCaseCode[];
+  hasBlockingEdgeCases?: boolean;
 }
 
 export function assessRetailMatchQuality(
   retail: RetailProduct,
   amazonTitle: string,
-  baseConfidence: "high" | "medium" | "low"
+  baseConfidence: "high" | "medium" | "low",
+  amazonPrice?: number
 ): RetailMatchQuality {
-  const warnings: string[] = [];
   const overlapScore = tokenOverlapScore(retail.productName, amazonTitle);
   const exclusive = detectStoreExclusiveBrand(retail.storeName, retail.productName, retail.brand);
   const variant = detectVariantMismatch(retail.productName, amazonTitle);
 
-  if (exclusive.isExclusive) {
-    warnings.push(
-      `"${exclusive.brandLabel}" is a ${retail.storeName} store brand — it usually has no identical Amazon listing. The matched ASIN is likely a similar product, not the same item.`
-    );
-  }
+  const edgeAssessment = assessRetailEdgeCases({
+    retail,
+    amazonTitle,
+    amazonPrice,
+    overlapScore,
+    baseConfidence,
+  });
 
-  for (const reason of variant.reasons) {
-    warnings.push(`Variant mismatch: ${reason}`);
-  }
-
-  if (!amazonBrandAppearsInRetailTitle(amazonTitle, retail.productName) && !exclusive.isExclusive) {
-    warnings.push(
-      "The Amazon listing brand/name does not closely match the store product — verify the ASIN manually before sourcing."
-    );
-  }
-
-  if (overlapScore < 0.25) {
-    warnings.push(
-      "Low title similarity between store and Amazon listings — this match is unreliable for arbitrage."
-    );
-  }
+  const warnings = edgeCasesToWarnings(edgeAssessment.cases);
 
   let confidence = baseConfidence;
 
-  if (exclusive.isExclusive || variant.mismatched || overlapScore < 0.2) {
+  if (
+    edgeAssessment.hasBlocking ||
+    exclusive.isExclusive ||
+    variant.mismatched ||
+    overlapScore < 0.2
+  ) {
     confidence = "low";
   } else if (overlapScore < 0.55 && confidence === "high") {
     confidence = "medium";
@@ -258,6 +242,7 @@ export function assessRetailMatchQuality(
   }
 
   const profitAnalysisReliable =
+    !edgeAssessment.hasBlocking &&
     !exclusive.isExclusive &&
     !variant.mismatched &&
     overlapScore >= 0.55 &&
@@ -268,8 +253,10 @@ export function assessRetailMatchQuality(
     overlapScore,
     isStoreExclusiveBrand: exclusive.isExclusive,
     storeBrandLabel: exclusive.brandLabel,
-    variantMismatch: variant.mismatched,
+    variantMismatch: variant.mismatched || edgeAssessment.codes.includes("scent_variant_mismatch"),
     profitAnalysisReliable,
     warnings,
+    edgeCaseCodes: edgeAssessment.codes,
+    hasBlockingEdgeCases: edgeAssessment.hasBlocking,
   };
 }

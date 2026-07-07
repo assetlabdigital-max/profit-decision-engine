@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { isDbReachable } from "@/lib/db/safe-query";
 import { isStripeEnabled, isEmailEnabled, isApifyEnabled, getRuntimeConfig } from "@/lib/runtime-config";
-import { validateApifyToken } from "@/lib/apify/client";
+import { validateApifyToken, isApifyUsageLimitExceeded } from "@/lib/apify/client";
 import { isEmailSignInAvailable } from "@/auth/auth";
 import type { ServiceHealth } from "@/types";
 
@@ -61,6 +61,11 @@ export async function GET(): Promise<NextResponse> {
   } else if (health.apify === "error") {
     warnings.push(
       "Apify token is set but rejected by the API — retail store scans and TikTok refresh will fall back to demo data. Update APIFY_API_TOKEN in Vercel."
+    );
+  }
+  if (process.env.APIFY_QUOTA_EXHAUSTED === "true" || isApifyUsageLimitExceeded()) {
+    warnings.push(
+      "Apify monthly usage limit exceeded — retail scans use direct-scrape/cache only until credits reset or plan is upgraded."
     );
   }
 
