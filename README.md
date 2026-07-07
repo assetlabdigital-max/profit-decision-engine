@@ -23,13 +23,13 @@ This isn't aspirational — it was tested by building and booting the app with
 | `POST /api/tiktok/refresh` unauthenticated | ✅ `401` |
 | Any unhandled internal error | ✅ caught, returns `200` with `mock: true`, never `500` |
 
-The one **deliberate, documented exception**: magic-link email sign-in
-requires a database adapter to store one-time tokens — there is no safe way
-to mock a round-trip token exchange. When `DATABASE_URL` is absent, the login
-page shows a clear "sign-in temporarily unavailable" notice instead of
-silently failing, and `/api/health` reports `emailSignInAvailable: false`.
-Every other subsystem (scan results, Stripe checkout/portal/webhook, email
-sending) has a genuine working mock fallback.
+The one **deliberate, documented exception**: magic-link sign-in does **not**
+require a database. Tokens are HMAC-signed with `AUTH_SECRET` and verified
+in-memory (`src/lib/auth/magic-token.ts`). When `RESEND_API_KEY` is absent,
+the login flow still works end-to-end — the link is printed to the server
+console instead of being emailed, and `/api/health` reports `email: "mock"`.
+Every other subsystem (scan results, Stripe checkout/portal/webhook, tier
+storage) has a genuine working mock fallback when its backing service is down.
 
 ## Architecture
 
@@ -38,7 +38,7 @@ src/
 ├── middleware.ts              # EDGE runtime — session existence check only
 ├── auth/
 │   ├── auth.config.ts         # EDGE-SAFE — providers: [], no Node imports
-│   └── auth.ts                # NODE ONLY — pg adapter + Resend provider
+│   └── auth.ts                # NODE ONLY — Credentials provider + HMAC magic-link verify
 ├── lib/
 │   ├── runtime-config.ts      # Single source of truth: is each service "live"?
 │   ├── db/
@@ -64,6 +64,7 @@ src/
 ├── app/
 │   ├── api/
 │   │   ├── scan/route.ts              # NODE — the safety-critical endpoint
+│   │   ├── auth/request-link/route.ts  # NODE — step 1: email a signed magic link
 │   │   ├── auth/[...nextauth]/route.ts # NODE — wraps auth.ts handlers
 │   │   ├── stripe/checkout/route.ts   # NODE — Checkout session creation
 │   │   ├── stripe/portal/route.ts     # NODE — Billing portal session
@@ -92,8 +93,25 @@ scripts/migrate.js             # npm run db:migrate
 `auth.config.ts` is imported by **both** `middleware.ts` (Edge runtime) and
 `auth.ts` (Node runtime). It contains `providers: []` and no Node-only
 imports — Edge can safely import it. `auth.ts` then spreads `authConfig` and
-adds the real Postgres adapter and Resend provider, neither of which Edge
-can run. `middleware.ts` only ever imports `auth.config.ts`, never `auth.ts`.
+adds a Credentials provider whose `authorize()` verifies HMAC-signed magic-link
+tokens (`src/lib/auth/magic-token.ts`). There is intentionally **no database
+adapter** — sessions are JWT-only. `middleware.ts` only ever imports
+`auth.config.ts`, never `auth.ts`.
+
+### Magic-link sign-in flow (DB-free)
+
+```
+POST /api/auth/request-link { email }
+  → createMagicToken() signs email + expiry with AUTH_SECRET
+  → Resend emails link to /auth/verify?token=... (or logs to console if mock)
+
+GET /auth/verify?token=...
+  → client calls signIn("email", { token })
+  → auth.ts authorize() verifies HMAC + expiry before issuing JWT session
+```
+
+Pro tier is **not** stored in the JWT — `resolveTier()` reads `users.tier`
+from Postgres when available (updated by the Stripe webhook).
 
 ### TikTok trend layer (Apify)
 
@@ -154,6 +172,18 @@ cp .env.example .env.local
 # the app runs fine with all of them blank.
 npm run dev
 ```
+
+### Deploying to Vercel
+
+`vercel.json` is included (Next.js framework, `iad1` region). Steps:
+
+1. Import this repo in Vercel.
+2. Copy env vars from `.env.example` into **Project Settings → Environment Variables**.
+3. Set `NEXT_PUBLIC_APP_URL` to your production URL (e.g. `https://your-app.vercel.app`).
+4. Apply DB migrations against your Supabase instance: `DATABASE_URL=... npm run db:migrate`.
+5. Register Stripe webhook: `https://<your-domain>/api/stripe/webhook` → copy signing secret to `STRIPE_WEBHOOK_SECRET`.
+
+Apify TikTok refresh stays **manual** (dashboard button) — no cron in `vercel.json` by design, to keep spend operator-controlled. To add scheduled refresh later, create a `CRON_SECRET`-protected `/api/cron/*` route and add a `crons` entry to `vercel.json`.
 
 ### Database
 
@@ -220,10 +250,10 @@ Then check `GET /api/health` to confirm all three report `"mock"`.
 - **Webhook idempotency under DB outage**: documented above — best-effort
   processing, not a hard guarantee, during a simultaneous DB+Stripe-webhook
   outage. This is an intentional trade-off favoring availability.
-- **Scan data is currently 100% mock**: there's no live Amazon data source
-  wired up yet. `run-scan.ts` has a clear seam (`runScan()`) where a real
-  product-data API would slot in, with the same try/catch → mock-fallback
-  shape as every other subsystem.
+- **Scan data falls back to mock** when Amazon SP-API or Apify credentials are
+  missing. With `AMAZON_*` and `APIFY_API_TOKEN` set, `run-scan.ts` fetches
+  live catalog/fees via SP-API and price/rating via Apify; retail URLs go
+  through `run-retail-scan.ts` (Apify store scrapers → SP-API ASIN match).
 - **Next.js version**: pinned to `14.2.35` to include the December 2025 RSC
   security patches (CVE-2025-55183/55184/67779). Do not downgrade below this
   without checking current advisories.

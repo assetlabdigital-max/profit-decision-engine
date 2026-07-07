@@ -50,9 +50,9 @@ export async function GET(): Promise<NextResponse> {
   if (auth.secret.startsWith("dev-insecure-fallback")) {
     warnings.push("AUTH_SECRET is not set — using an insecure dev fallback. Set AUTH_SECRET in production.");
   }
-  if (!isEmailSignInAvailable()) {
+  if (!isEmailEnabled()) {
     warnings.push(
-      "Magic-link sign-in is unavailable: it requires a live database adapter (DATABASE_URL not set or DB unreachable)."
+      "Resend is not configured — magic-link emails are logged to the server console instead of being sent."
     );
   }
   if (!isApifyEnabled()) {
@@ -64,7 +64,10 @@ export async function GET(): Promise<NextResponse> {
       ok: true,
       status: "up",
       services: health,
+      // Auth is DB-free (HMAC magic-link + JWT). Always available; Resend
+      // only controls whether the link is emailed vs logged to console.
       emailSignInAvailable: isEmailSignInAvailable(),
+      authMode: "jwt-magic-link",
       warnings,
       timestamp: new Date().toISOString(),
     },

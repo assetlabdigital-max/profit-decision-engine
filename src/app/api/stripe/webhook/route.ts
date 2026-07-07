@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getRuntimeConfig } from "@/lib/runtime-config";
-import { upgradeUserToPro } from "@/lib/db/upgrade";
+import { tryClaimStripeEvent, upgradeUserToPro } from "@/lib/db/users";
 
 const stripe = new Stripe(getRuntimeConfig().stripe.secretKey!, {
   apiVersion: "2024-06-20",
@@ -28,7 +28,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  console.log("[stripe/webhook] event type:", event.type);
+  console.log("[stripe/webhook] event type:", event.type, "id:", event.id);
+
+  const claim = await tryClaimStripeEvent(event.id);
+  if (!claim.mock && !claim.claimed) {
+    console.log(`[stripe/webhook] duplicate event ${event.id}, skipping`);
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+  if (claim.mock) {
+    console.warn(
+      `[stripe/webhook] DB unavailable — cannot dedupe event ${event.id}, processing best-effort`
+    );
+  }
 
   if (event.type === "checkout.session.completed") {
     try {
@@ -36,7 +47,8 @@ export async function POST(req: Request) {
 
       const email = session.customer_email ?? session.customer_details?.email ?? null;
       const customerId = typeof session.customer === "string" ? session.customer : "";
-      const subscriptionId = typeof session.subscription === "string" ? session.subscription : "";
+      const subscriptionId =
+        typeof session.subscription === "string" ? session.subscription : "";
 
       if (!email) {
         console.error("[stripe/webhook] no email found in checkout session");
@@ -46,7 +58,7 @@ export async function POST(req: Request) {
       const result = await upgradeUserToPro({
         email,
         stripeCustomerId: customerId,
-        stripeSubscriptionId: subscriptionId,
+        stripeSubscriptionId: subscriptionId || null,
       });
 
       if (result.ok) {

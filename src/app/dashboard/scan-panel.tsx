@@ -45,6 +45,19 @@ const VERDICT_COLORS: Record<string, string> = {
   RISK: "#ef4444",
 };
 
+function isProductUrl(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  return (
+    v.startsWith("http://") ||
+    v.startsWith("https://") ||
+    v.includes("amazon.com") ||
+    v.includes("costco.com") ||
+    v.includes("walmart.com") ||
+    v.includes("target.com") ||
+    v.includes("samsclub.com")
+  );
+}
+
 export function ScanPanel({ tier }: { tier: string }) {
   const [asin, setAsin] = useState("");
   const [cost, setCost] = useState("");
@@ -60,13 +73,15 @@ export function ScanPanel({ tier }: { tier: string }) {
     setResult(null);
 
     try {
+      const input = asin.trim();
+      const payload = isProductUrl(input)
+        ? { productUrl: input, cost: cost ? Number(cost) : undefined }
+        : { asin: input.toUpperCase(), cost: cost ? Number(cost) : undefined };
+
       const res = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          asin: asin.trim().toUpperCase(),
-          cost: cost ? Number(cost) : undefined,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const json = await res.json();

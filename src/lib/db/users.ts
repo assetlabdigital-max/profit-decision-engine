@@ -149,26 +149,56 @@ export async function recordScan(params: {
   };
 }
 
+/**
+ * Idempotency guard for Stripe webhooks. Inserts the event id exactly once;
+ * a duplicate delivery yields claimed: false. When the DB is unavailable we
+ * fail open (claimed: true, mock: true) so Stripe still gets 200 — see README.
+ */
+export async function tryClaimStripeEvent(
+  eventId: string
+): Promise<{ claimed: boolean; mock: boolean }> {
+  const result = await safeQuery<{ event_id: string }>(
+    `insert into processed_stripe_events (event_id)
+     values ($1)
+     on conflict do nothing
+     returning event_id`,
+    [eventId]
+  );
+
+  if (!result.ok) {
+    return { claimed: true, mock: true };
+  }
+
+  return { claimed: result.rows.length > 0, mock: false };
+}
+
 export async function upgradeUserToPro(params: {
   email: string;
   stripeCustomerId: string;
   stripeSubscriptionId: string | null;
-}) {
+}): Promise<{ ok: boolean; mock: boolean; user?: DbUser }> {
   const result = await safeQuery<any>(
-    `update users
-     set tier = 'pro',
-         stripe_customer_id = $2,
-         stripe_subscription_id = $3,
-         stripe_subscription_status = 'active',
-         updated_at = now()
-     where email = $1
+    `insert into users (
+       email,
+       tier,
+       stripe_customer_id,
+       stripe_subscription_id,
+       stripe_subscription_status
+     )
+     values ($1, 'pro', $2, $3, 'active')
+     on conflict (email) do update set
+       tier = 'pro',
+       stripe_customer_id = excluded.stripe_customer_id,
+       stripe_subscription_id = excluded.stripe_subscription_id,
+       stripe_subscription_status = 'active',
+       updated_at = now()
      returning *`,
     [params.email, params.stripeCustomerId, params.stripeSubscriptionId]
   );
 
   if (result.ok && result.rows?.[0]) {
-    return { ok: true, user: rowToUser(result.rows[0]) };
+    return { ok: true, mock: false, user: rowToUser(result.rows[0]) };
   }
 
-  return { ok: false };
+  return { ok: false, mock: !result.ok };
 }
