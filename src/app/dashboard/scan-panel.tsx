@@ -30,6 +30,13 @@ interface ScanResult {
     buyBoxPrice: number;
     competitionLevel: "low" | "medium" | "high";
   };
+  retailArbitrage?: {
+  storeName: string;
+  storePrice: number;
+  storeProductName: string;
+  amazonTitle: string;
+  matchConfidence: "high" | "medium" | "low";
+  };
 }
 
 const VERDICT_COLORS: Record<string, string> = {
@@ -97,7 +104,7 @@ export function ScanPanel({ tier }: { tier: string }) {
         />
         <input
           type="number"
-          placeholder="Your cost $ (optional)"
+          placeholder="ASIN or Costco/Walmart/Target URL"
           value={cost}
           onChange={(e) => setCost(e.target.value)}
           style={{
@@ -179,6 +186,33 @@ export function ScanPanel({ tier }: { tier: string }) {
               <div style={{ fontWeight: 600 }}>{result.reviewCount.toLocaleString()}</div>
             </div>
           </div>
+
+{result.retailArbitrage && (
+  <div style={{ marginBottom: 16, padding: 12, background: "#f0fdf4", borderRadius: 6, border: "1px solid #bbf7d0" }}>
+    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
+      🛒 Retail Arbitrage
+    </div>
+    <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+      <div>
+        <div style={{ fontSize: 11, color: "#999", textTransform: "uppercase" }}>{result.retailArbitrage.storeName} Price</div>
+        <div style={{ fontWeight: 600, color: "#16a34a" }}>${result.retailArbitrage.storePrice.toFixed(2)}</div>
+      </div>
+      <div>
+        <div style={{ fontSize: 11, color: "#999", textTransform: "uppercase" }}>Amazon Price</div>
+        <div style={{ fontWeight: 600 }}>${result.price.toFixed(2)}</div>
+      </div>
+      <div>
+        <div style={{ fontSize: 11, color: "#999", textTransform: "uppercase" }}>Price Difference</div>
+        <div style={{ fontWeight: 600, color: (result.price - result.retailArbitrage.storePrice) > 0 ? "#16a34a" : "#ef4444" }}>
+          ${(result.price - result.retailArbitrage.storePrice).toFixed(2)}
+        </div>
+      </div>
+    </div>
+    <div style={{ fontSize: 12, color: "#666", marginTop: 8 }}>
+      Match confidence: {result.retailArbitrage.matchConfidence} · Amazon: "{result.retailArbitrage.amazonTitle.slice(0, 60)}..."
+    </div>
+  </div>
+)}
 
           {/* Eligibility */}
           {result.eligibility && (
