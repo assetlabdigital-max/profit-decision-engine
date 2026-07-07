@@ -6,11 +6,8 @@
  * results" pattern we use here.
  *
  * CRITICAL DESIGN CONSTRAINT (per project decision): this client is
- * ONLY ever called from the manual refresh endpoint
- * (/api/tiktok/refresh), NEVER from a user-facing read path like
- * /api/tiktok/trending or /api/tiktok/search. Those always read from
- * the DB cache. This file existing in the import graph of a GET route
- * would be a sign something is wired wrong.
+ * ONLY ever called from user-initiated write paths (manual TikTok refresh,
+ * retail URL scans), NEVER from a passive read path like /api/tiktok/trending.
  *
  * Apify runs can take anywhere from a few seconds to a couple of
  * minutes depending on the actor and result count, so we use the

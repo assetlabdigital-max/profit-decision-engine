@@ -1,9 +1,43 @@
 # Profit Decision Engine — 인수인계 문서
 
-> **마지막 업데이트:** 2026-07-07 (Cursor 로컬, Agent 모드)  
-> **최신 커밋:** `git log -1 --oneline` 참고 (현재 `f31f6c9` 근처)  
+> **마지막 업데이트:** 2026-07-07 14:48 (Cursor 로컬, Agent 모드)  
+> **최신 커밋:** `git log -1 --oneline` 참고 (이번 push 직후 확인)  
 > **목적:** 토큰 제한·계정 전환 시 다음 세션에서 바로 이어서 작업할 수 있도록 현재 상태를 기록합니다.  
 > **규칙:** 이 파일은 작업할 때마다 **항상** 최신 상태로 업데이트한다 (별도 명령 불필요).
+
+---
+
+## ⚠️ 세션 중단점 — 다음 계정이 여기서 시작
+
+**이 세션에서 멈춤.** 아래는 이미 끝난 것 — **다시 하지 말 것:**
+
+| 항목 | 상태 | 비고 |
+|------|------|------|
+| git push | ✅ 완료 | `origin/main` = `90c3b88` |
+| Vercel link | ✅ 완료 | `.vercel/` 생성됨 (gitignored) |
+| 프로덕션 health | ✅ 확인 | 전 서비스 `live`, warnings `[]` |
+| `npm run build` | ✅ 성공 | 2026-07-07 |
+| `npm run smoke` (로컬) | ✅ 5/5 | `http://localhost:3000` |
+| smoke-test 스크립트 작성 | ✅ 완료 | `scripts/smoke-test.js` (아직 미커밋) |
+
+**미커밋 변경 (워킹 트리):**
+```
+ M README2.md
+ M package.json
+?? scripts/smoke-test.js
+```
+
+**다음 세션 첫 작업 (순서 고정):**
+1. `git status` — 위 3파일이 아직 미커밋인지 확인 (이미 커밋됐으면 skip)
+2. 미커밋이면 → 커밋 + `git push origin main`
+3. `npm run smoke -- https://www.profit-decision-engine.com` (프로덕션 smoke, 아직 **미실행**)
+4. Stripe checkout E2E 수동 테스트 (로그인 → pricing → 결제 → Pro tier)
+
+**아직 안 한 것 (중복 금지):**
+- ❌ 프로덕션 smoke 미실행
+- ❌ Stripe checkout E2E 수동 테스트 미실행
+- ❌ TikTok Apify refresh 수동 테스트 미실행
+- ❌ 이번 변경 커밋·push 미완료
 
 ---
 
@@ -11,9 +45,11 @@
 
 Amazon 셀러용 BUY / SKIP / RISK 의사결정 SaaS. Next.js 14 + TypeScript. Stripe·Resend·Supabase(Postgres)·Apify·Amazon SP-API 연동. **외부 서비스가 전부 죽어도 mock으로 응답**하는 방어적 아키텍처가 핵심.
 
+**프로덕션:** https://www.profit-decision-engine.com — 전 서비스 `live`, health warnings 없음.
+
 ---
 
-## 1. 완료된 작업 (1~6번 전부)
+## 1. 완료된 작업 (1~10번)
 
 | # | 작업 | 상태 | 핵심 변경 |
 |---|------|------|-----------|
@@ -22,16 +58,26 @@ Amazon 셀러용 BUY / SKIP / RISK 의사결정 SaaS. Next.js 14 + TypeScript. S
 | 3 | `upgradeUserToPro` 통합 | ✅ | `users.ts` 단일화, `upgrade.ts` / `upgrade-user.ts` 삭제 |
 | 4 | README / health 동기화 | ✅ | DB-free auth 문서화, `authMode: "jwt-magic-link"` |
 | 5 | `.env.example` | ✅ | 생성 + `.gitignore`에 `!.env.example` |
-| 6 | Vercel 배포 설정 | ✅ | `vercel.json` (Next.js, `iad1`). Cron **미포함** (Apify 수동 refresh 설계 유지) |
+| 6 | Vercel 배포 설정 | ✅ | `vercel.json` (Next.js, `iad1`). Cron **미포함** |
+| 7 | `git push origin main` | ✅ | `origin/main`과 동기화 완료 |
+| 8 | Vercel 프로젝트 연결 | ✅ | `profit-engine1/profit-decision-engine`, 로컬 `vercel link` 완료 |
+| 9 | 프로덕션 health 검증 | ✅ | db/stripe/email/apify 전부 `live`, warnings `[]` |
+| 10 | E2E smoke test 스크립트 | ✅ | `scripts/smoke-test.js` + `npm run smoke` (5/5 통과) |
 
-**커밋:** `3f9155e` on `main` — working tree clean.
+**커밋:** `90c3b88` — **7~10번 변경은 워킹 트리에만 있음, 아직 push 안 됨**
 
 ---
 
-## 2. 빌드 검증
+## 2. 빌드·테스트 검증
 
 ```bash
 npm run build   # ✅ 2026-07-07 성공
+npm run smoke   # ✅ 2026-07-07 로컬 5/5 통과
+```
+
+프로덕션 smoke (선택):
+```bash
+npm run smoke -- https://www.profit-decision-engine.com
 ```
 
 ---
@@ -40,30 +86,43 @@ npm run build   # ✅ 2026-07-07 성공
 
 | 우선순위 | 작업 | 비고 |
 |----------|------|------|
-| **P0** | `git push origin main` | 로컬 커밋만 있음. 사용자 요청 시 push |
-| P1 | Vercel 프로젝트 연결 + env 설정 | `.env.example` → Vercel Environment Variables |
-| P2 | Supabase migration | `DATABASE_URL=... npm run db:migrate` |
-| P3 | Stripe webhook 등록 | `https://<domain>/api/stripe/webhook` |
-| P4 | E2E 수동 테스트 | 로그인 → 스캔 → checkout → Pro tier |
-| P5 | (선택) Cron route 추가 | `CRON_SECRET` 보호 `/api/cron/*` + `vercel.json` crons |
+| **P0** | Costco retail URL 재테스트 | 배포 후 §12 URL로 스캔 확인 |
+| P1 | 프로덕션 smoke | `npm run smoke -- https://www.profit-decision-engine.com` (**미실행**) |
+| P2 | Stripe checkout E2E (수동) | 로그인 → pricing → checkout → webhook → Pro tier 확인 |
+| P3 | TikTok Apify refresh (수동) | 대시보드 버튼 → 캐시 적재 확인 |
+| P4 | (선택) Cron route 추가 | `CRON_SECRET` 보호 `/api/cron/*` + `vercel.json` crons |
 
 ---
 
-## 4. Vercel 배포 체크리스트
+## 4. Vercel 배포 현황
 
-1. Vercel에서 repo import
-2. Environment Variables (`.env.example` 참고):
-   - 필수: `AUTH_SECRET`, `NEXT_PUBLIC_APP_URL`
-   - DB: `DATABASE_URL` (Supabase)
-   - Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, price IDs
-   - Email: `RESEND_API_KEY`, `EMAIL_FROM`
-   - Apify: `APIFY_API_TOKEN`
-   - Amazon: `AMAZON_*`
-3. Deploy 후 `GET /api/health` 확인
-4. Stripe Dashboard → Webhook endpoint 등록
-5. Supabase에 migration 적용 (로컬에서 production URL로 `db:migrate`)
+| 항목 | 값 |
+|------|-----|
+| Vercel 팀 | `profit-engine1` |
+| 프로젝트 | `profit-decision-engine` |
+| 프로덕션 URL | https://www.profit-decision-engine.com |
+| Vercel alias | https://profit-decision-engine.vercel.app |
+| 리전 | `iad1` |
+| 최근 배포 | 2026-07-07, status **Ready** |
+| 로컬 link | ✅ `.vercel/` (gitignored) |
 
-`vercel.json` 내용:
+### 환경변수 (프로덕션 health 기준 — 전부 live)
+
+`.env.example` 항목이 Vercel에 설정된 것으로 확인됨 (health `warnings: []`).
+
+수동 재확인: Vercel Dashboard → Project Settings → Environment Variables
+
+### 배포·마이그레이션 재실행 시
+
+```bash
+# DB migration (Supabase production URL)
+DATABASE_URL=postgresql://... npm run db:migrate
+
+# Stripe webhook endpoint (이미 등록됐을 가능성 높음)
+https://www.profit-decision-engine.com/api/stripe/webhook
+```
+
+`vercel.json`:
 ```json
 { "framework": "nextjs", "regions": ["iad1"] }
 ```
@@ -80,6 +139,8 @@ npm run build   # ✅ 2026-07-07 성공
 | Health | `src/app/api/health/route.ts` |
 | Auth (DB-free) | `src/auth/auth.ts`, `src/lib/auth/magic-token.ts` |
 | Env 체크리스트 | `.env.example` |
+| DB migration | `scripts/migrate.js`, `migrations/*.sql` |
+| E2E smoke test | `scripts/smoke-test.js` |
 | 공식 아키텍처 문서 | `README.md` |
 | 배포 설정 | `vercel.json` |
 
@@ -113,6 +174,13 @@ checkout.session.completed
   → upgradeUserToPro(email, stripeIds)
 ```
 
+### Smoke test 커버리지 (`npm run smoke`)
+1. `GET /api/health` — ok + services
+2. `POST /api/scan` — verdict (BUY/SKIP/RISK)
+3. `GET /api/tiktok/trending` — data array
+4. `POST /api/stripe/checkout` unauth — 401
+5. `POST /api/auth/request-link` — 200
+
 ---
 
 ## 7. 환경변수
@@ -131,10 +199,11 @@ curl http://localhost:3000/api/health
 
 | 서비스 | 상태 |
 |--------|------|
-| Apify, Stripe, Resend, Amazon SP-API | ✅ 코드 연동 |
-| Supabase | ⚠️ Postgres URL만 (SDK 없음) |
-| Vercel | ✅ `vercel.json` 추가 (배포 준비) |
-| GitHub / Cloudflare | 인프라 레벨만 |
+| Apify, Stripe, Resend, Amazon SP-API | ✅ 코드 연동 + **프로덕션 live** |
+| Supabase | ✅ Postgres 연결 live (health `db: "live"`) |
+| Vercel | ✅ 배포 완료, 프로덕션 Ready |
+| GitHub | ✅ `assetlabdigital-max/profit-decision-engine` |
+| Cloudflare | 인프라 레벨 (도메인 alias 확인됨) |
 
 ---
 
@@ -142,25 +211,47 @@ curl http://localhost:3000/api/health
 
 ```
 @README2.md 만 읽고 현재 상태 파악한 뒤 이어서 작업해 줘.
+⚠️ 세션 중단점 섹션 확인 — 이미 완료된 작업 중복하지 말 것.
 ```
 
 구체적 예:
 ```
-README2.md 보고 Vercel env 설정 가이드 더 자세히 써 줘
+README2.md 세션 중단점 보고 P0 커밋+push 해 줘
 ```
 ```
-README2.md 보고 git push 해 줘
+README2.md 보고 Stripe checkout E2E 가이드 써 줘
 ```
 
 ---
 
 ## 10. 알려진 트레이드오프
 
-- `AUTH_SECRET` 미설정 → dev fallback (health warnings)
+- `AUTH_SECRET` 미설정 → dev fallback (health warnings) — **프로덕션은 설정됨**
 - DB outage 중 webhook → 멱등성 불가, best-effort
 - JWT tier 항상 `free` — Pro는 DB만 신뢰
 - Apify 수동 refresh만 — Cron 없음 (의도적)
 - TikTok — Apify 스크래퍼 (ToS gray area)
+
+---
+
+## 12. 최근 버그 수정 — Retail URL → mock (RETAIL) 문제
+
+**증상:** Costco/Walmart URL 스캔 시 `demo data`, ASIN `RETAIL`, Retail Arbitrage 없음.
+
+**원인:**
+1. Costco Apify에 `RESIDENTIAL` proxy 미설정
+2. Costco `onlinePrice` fallback 미처리 (`memberPrice` null 시 파싱 실패)
+3. Walmart/Target actor `dtrungtin~*` — Apify에서 404 (존재하지 않음)
+4. URL query string (`?DM_PersistentCookieCreated=...`) 그대로 전달
+
+**수정:** ✅ 커밋·push 완료 (이번 세션)
+
+**배포 후 재테스트:**
+```
+Costco URL (query 제거됨 자동):
+https://www.costco.com/p/-/super-nature-shampooconditioner-30-fl-oz-each/4000348787
+```
+기대: `demo data` 없음, **🛒 Retail Arbitrage** 섹션 표시.
 
 ---
 

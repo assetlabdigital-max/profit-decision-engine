@@ -39,7 +39,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // 소매점 URL이면 retail scan으로 분기
     const inputUrl = parsed.data.productUrl ?? parsed.data.asin ?? "";
     if (inputUrl && isRetailUrl(inputUrl)) {
-      const { result, mock } = await runRetailScan({
+      const { result, mock, fallbackReason } = await runRetailScan({
         retailUrl: inputUrl,
         cost: parsed.data.cost,
         tier,
@@ -50,6 +50,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         ok: true,
         data: result,
         mock: mock || usedFallback,
+        ...(fallbackReason ? { mockReason: fallbackReason } : {}),
       };
       return NextResponse.json(body, { status: 200 });
     }

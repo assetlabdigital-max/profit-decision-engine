@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "db:migrate": "node scripts/migrate.js",
+    "smoke": "node scripts/smoke-test.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

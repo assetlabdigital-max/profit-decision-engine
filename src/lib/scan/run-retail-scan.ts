@@ -14,6 +14,11 @@ import { runScan } from "@/lib/scan/run-scan";
 import { buildMockScanBase } from "@/lib/mock/mock-data";
 import type { Tier, ScanResultBase, ScanResultPro } from "@/types";
 
+export type RetailScanFallbackReason =
+  | "retail_scrape_failed"
+  | "amazon_match_failed"
+  | null;
+
 export interface RunRetailScanParams {
   retailUrl: string;
   cost?: number;
@@ -24,6 +29,7 @@ export interface RunRetailScanParams {
 export interface RunRetailScanResult {
   result: ScanResultBase | ScanResultPro;
   mock: boolean;
+  fallbackReason: RetailScanFallbackReason;
 }
 
 export async function runRetailScan({
@@ -32,42 +38,39 @@ export async function runRetailScan({
   tier,
   userId,
 }: RunRetailScanParams): Promise<RunRetailScanResult> {
-
   console.log(`[retail-scan] starting retail scan for: ${retailUrl}`);
 
-  // 1단계: 소매점 상품 정보 스크래핑
   const retailProduct = await scrapeRetailProduct(retailUrl);
 
   if (!retailProduct) {
     console.warn("[retail-scan] could not scrape retail product, returning mock");
     const base = buildMockScanBase("RETAIL");
-    return { result: base, mock: true };
+    return { result: base, mock: true, fallbackReason: "retail_scrape_failed" };
   }
 
-  console.log(`[retail-scan] retail: ${retailProduct.storeName} $${retailProduct.storePrice} — "${retailProduct.productName}"`);
+  console.log(
+    `[retail-scan] retail: ${retailProduct.storeName} $${retailProduct.storePrice} — "${retailProduct.productName}"`
+  );
 
-  // 2단계: Amazon에서 같은 상품 찾기
-  const amazonMatch = await findAmazonMatch(retailProduct.productName);
+  const amazonMatch = await findAmazonMatch(retailProduct.productName, retailProduct.brand);
 
   if (!amazonMatch) {
     console.warn("[retail-scan] could not find Amazon match, returning mock");
     const base = buildMockScanBase("RETAIL");
-    return { result: base, mock: true };
+    return { result: base, mock: true, fallbackReason: "amazon_match_failed" };
   }
 
   console.log(`[retail-scan] Amazon match: ${amazonMatch.asin} — "${amazonMatch.title}"`);
 
-  // 3단계: 소매점 구매가를 원가로 넣어서 기존 스캔 실행
   const { result, mock } = await runScan({
     request: {
       asin: amazonMatch.asin,
-      cost: cost ?? retailProduct.storePrice, // 소매점 가격이 원가
+      cost: cost ?? retailProduct.storePrice,
     },
     tier,
     userId,
   });
 
-  // 4단계: 결과에 소매점 비교 정보 추가
   const enrichedResult = {
     ...result,
     retailArbitrage: {
@@ -79,5 +82,5 @@ export async function runRetailScan({
     },
   };
 
-  return { result: enrichedResult as any, mock };
+  return { result: enrichedResult as ScanResultBase | ScanResultPro, mock, fallbackReason: null };
 }

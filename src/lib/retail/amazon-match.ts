@@ -13,14 +13,17 @@ export interface AmazonMatch {
   confidence: "high" | "medium" | "low";
 }
 
-export async function findAmazonMatch(productName: string): Promise<AmazonMatch | null> {
+export async function findAmazonMatch(
+  productName: string,
+  brand?: string
+): Promise<AmazonMatch | null> {
   if (!isAmazonEnabled()) return null;
 
   try {
     const marketplaceId = process.env.AMAZON_MARKETPLACE_ID || "ATVPDKIKX0DER";
 
-    // Clean up product name for better search results
-    const query = productName
+    const rawQuery = [brand?.trim(), productName.trim()].filter(Boolean).join(" ");
+    const query = rawQuery
       .replace(/[^\w\s]/g, " ")
       .replace(/\s+/g, " ")
       .trim()

@@ -64,6 +64,7 @@ export function ScanPanel({ tier }: { tier: string }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [mock, setMock] = useState(false);
+  const [mockReason, setMockReason] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleScan() {
@@ -71,6 +72,7 @@ export function ScanPanel({ tier }: { tier: string }) {
     setLoading(true);
     setError(null);
     setResult(null);
+    setMockReason(null);
 
     try {
       const input = asin.trim();
@@ -93,6 +95,7 @@ export function ScanPanel({ tier }: { tier: string }) {
 
       setResult(json.data);
       setMock(json.mock);
+      setMockReason(json.mockReason ?? null);
     } catch (err) {
       setError("Network error — please try again.");
     } finally {
@@ -174,6 +177,14 @@ export function ScanPanel({ tier }: { tier: string }) {
               </span>
             )}
           </div>
+
+          {mock && mockReason && (
+            <p style={{ margin: "0 0 12px", fontSize: 13, color: "#b45309", background: "#fffbeb", padding: 10, borderRadius: 6 }}>
+              {mockReason === "retail_scrape_failed"
+                ? "Could not read product name/price from the store URL (Apify scrape failed). Try the direct product page URL without extra query parameters."
+                : "Found the store product but could not match it on Amazon. Try a more specific product URL or search by ASIN instead."}
+            </p>
+          )}
 
           {/* Product Info */}
           <h3 style={{ margin: "0 0 4px", fontSize: 16 }}>{result.title}</h3>
