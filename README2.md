@@ -86,7 +86,7 @@ npm run smoke -- https://www.profit-decision-engine.com
 
 | 우선순위 | 작업 | 비고 |
 |----------|------|------|
-| **P0** | Costco retail URL 재테스트 | 배포 후 §12 URL로 스캔 확인 |
+| **P0** | — | Costco retail URL fix **완료** (`a588fc6`) |
 | P1 | 프로덕션 smoke | `npm run smoke -- https://www.profit-decision-engine.com` (**미실행**) |
 | P2 | Stripe checkout E2E (수동) | 로그인 → pricing → checkout → webhook → Pro tier 확인 |
 | P3 | TikTok Apify refresh (수동) | 대시보드 버튼 → 캐시 적재 확인 |
@@ -246,11 +246,12 @@ README2.md 보고 Stripe checkout E2E 가이드 써 줘
 
 **수정:** ✅ `a159e66` + follow-up (Costco search-first, Apify timeout param, Vercel maxDuration 120s)
 
-**추가 수정 (2차, 미배포):**
-- Apify `timeout=120` query param 누락 수정
-- Costco `/p/-/slug/id` → searchQuery 우선 시도
-- `startUrls` plain string 형식 + proxy fallback
-- `/api/scan` `maxDuration=120`, `vercel.json` functions 설정
+**추가 수정 (2차):** ✅ `a588fc6` 배포 완료 — 프로덕션 재테스트 **성공** (2026-07-07)
+
+**프로덕션 검증 결과:**
+- `mock: false`, ASIN `B0D8YQK1VW`
+- Retail Arbitrage: Costco **$24.99** vs Amazon **$35.75**
+- 응답 시간 ~54초 (정상 — Apify search + Amazon match)
 
 **배포 후 재테스트:**
 ```
