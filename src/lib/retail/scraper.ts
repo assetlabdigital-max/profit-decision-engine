@@ -33,6 +33,7 @@ type StoreConfig = {
   name: string;
   domains: string[];
   directScrape?: (url: string) => Promise<RetailProduct | null>;
+  maxApifyAttempts?: number;
   buildAttempts: (url: string) => ScrapeAttempt[];
   pickItem: (items: Record<string, unknown>[], url: string) => Record<string, unknown> | null;
   parser: (item: Record<string, unknown>) => ParsedRetail | null;
@@ -254,6 +255,8 @@ function parseGenericRetailItem(item: Record<string, unknown>): ParsedRetail | n
   const product = item.product as Record<string, unknown> | undefined;
   const offers = item.offers as Record<string, unknown> | undefined;
   const priceObj = item.price as Record<string, unknown> | undefined;
+  const priceValue =
+    priceObj && typeof priceObj.value === "number" ? priceObj.value : null;
   const name = parseName(
     item.name,
     item.title,
@@ -263,6 +266,7 @@ function parseGenericRetailItem(item: Record<string, unknown>): ParsedRetail | n
     product?.title
   );
   const price = parsePrice(
+    priceValue,
     offers?.price,
     priceObj?.discounted_price,
     priceObj?.regular_price,
@@ -325,6 +329,7 @@ function buildWalgreensWebScraperAttempt(url: string): ScrapeAttempt {
       startUrls: [{ url: encoded }],
       maxRequestsPerCrawl: 1,
       maxConcurrency: 1,
+      injectJQuery: true,
       proxyConfiguration: RESIDENTIAL_PROXY,
       pageFunction: `async function pageFunction(context) {
         const $ = context.jQuery;
@@ -463,9 +468,18 @@ const STORE_CONFIGS: StoreConfig[] = [
     name: "Walgreens",
     domains: ["walgreens.com"],
     directScrape: scrapeWalgreensDirect,
+    maxApifyAttempts: 2,
     buildAttempts: (url) => {
       const encoded = encodeWalgreensProductUrl(url);
       return [
+        {
+          actorId: "scrapemint~ecommerce-scraper",
+          label: "scrapemint-jsonld",
+          input: {
+            productUrls: [encoded],
+            proxyConfiguration: RESIDENTIAL_PROXY,
+          },
+        },
         buildWalgreensWebScraperAttempt(url),
         {
           actorId: "getdataforme~walgreens-parser-spider",
@@ -559,7 +573,7 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
     if (direct) return direct;
   }
 
-  const attempts = store.buildAttempts(cleanUrl);
+  const attempts = store.buildAttempts(cleanUrl).slice(0, store.maxApifyAttempts ?? undefined);
 
   for (let i = 0; i < attempts.length; i++) {
     const { actorId, input, label } = attempts[i];
