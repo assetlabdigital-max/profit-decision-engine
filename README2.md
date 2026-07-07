@@ -1,7 +1,7 @@
 # Profit Decision Engine — 인수인계 문서
 
 > **마지막 업데이트:** 2026-07-07 15:45 (Cursor 로컬, Agent 모드)  
-> **최신 커밋:** variant mismatch 감지 — push 직후 `git log -1 --oneline` 확인  
+> **최신 커밋:** `e787ca8` — variant mismatch 감지  
 > **목적:** 토큰 제한·계정 전환 시 다음 세션에서 바로 이어서 작업할 수 있도록 현재 상태를 기록합니다.  
 > **규칙:** 이 파일은 작업할 때마다 **항상** 최신 상태로 업데이트한다 (별도 명령 불필요).
 
@@ -15,8 +15,8 @@
 |------|------|------|
 | variant mismatch 코드 | ✅ 완료 | `match-quality.ts`, `amazon-match.ts`, `scan-panel.tsx` |
 | `npm run typecheck` / `build` | ✅ 성공 | 2026-07-07 |
-| git push | ⏳ 진행 중 | variant mismatch 커밋 후 push |
-| eos Target 프로덕션 재테스트 | ⏳ push 후 | 아래 §12 참고 |
+| git push | ✅ 완료 | `e787ca8` → `origin/main` |
+| eos Target 프로덕션 재테스트 | ✅ 완료 | `variantMismatch: true`, confidence `low`, SKIP |
 
 **다음 세션 첫 작업 (push·재테스트 완료 후):**
 1. eos Beach Waves URL 프로덕션 결과 확인 (`variantMismatch: true`, confidence `low`, SKIP)
@@ -269,6 +269,12 @@ https://www.costco.com/p/-/super-nature-shampooconditioner-30-fl-oz-each/4000348
 https://www.target.com/p/eos-shea-better-24h-moisture-body-lotion-beach-waves-16-fl-oz/-/A-95195102
 ```
 기대: `variantMismatch: true`, `matchConfidence: low`, warnings에 pack/variant 문구, Pro profit 숨김, verdict SKIP.
+
+**프로덕션 검증 (2026-07-07, `e787ca8` 배포 후):**
+- `mock: false`, ASIN `B0D5RM1W7K` (Jasmine Peach 3-pack — 여전히 동일 SKU 아님)
+- `variantMismatch: true`, `matchConfidence: low`, `profitAnalysisReliable: false`, verdict **SKIP**
+- 경고: store `beach, waves` vs Amazon `jasmine, peach, butter`
+- 이전 버그(Vanilla Cashmere 2-Pack + `confidence: high`) **해소됨**
 
 ⚠️ Target scrape 가격 ~$35는 실제 소매가(~$8–12)와 다를 수 있음 — Apify actor 데이터 품질 별도 조사 필요.
 
