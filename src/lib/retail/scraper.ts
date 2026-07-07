@@ -479,6 +479,12 @@ function detectStore(url: string): StoreConfig | null {
   return STORE_CONFIGS.find((store) => store.domains.some((domain) => lower.includes(domain))) ?? null;
 }
 
+let lastRetailScrapeError: string | null = null;
+
+export function getLastRetailScrapeError(): string | null {
+  return lastRetailScrapeError;
+}
+
 function parseItem(
   item: Record<string, unknown>,
   storeParser: (item: Record<string, unknown>) => ParsedRetail | null
@@ -495,6 +501,7 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
   }
 
   console.log(`[retail/scraper] scraping ${store.name} URL: ${cleanUrl}`);
+  lastRetailScrapeError = null;
 
   if (store.directScrape) {
     const direct = await store.directScrape(cleanUrl);
@@ -512,6 +519,7 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
     });
 
     if (!run.ok) {
+      lastRetailScrapeError = run.error;
       console.error(`[retail/scraper] ${label} failed for ${store.name}:`, run.error);
       continue;
     }
@@ -550,5 +558,8 @@ export async function scrapeRetailProduct(url: string): Promise<RetailProduct | 
   if (jsonLd) return jsonLd;
 
   console.error(`[retail/scraper] all ${attempts.length} attempt(s) failed for ${store.name}`);
+  if (!lastRetailScrapeError) {
+    lastRetailScrapeError = "No store product data could be parsed from any scrape attempt.";
+  }
   return null;
 }

@@ -4,7 +4,7 @@
  * NODE RUNTIME. Orchestrates retail URL → Amazon match → scan flow.
  */
 
-import { scrapeRetailProduct } from "@/lib/retail/scraper";
+import { scrapeRetailProduct, getLastRetailScrapeError } from "@/lib/retail/scraper";
 import { findAmazonMatch } from "@/lib/retail/amazon-match";
 import { assessRetailMatchQuality } from "@/lib/retail/match-quality";
 import { runScan } from "@/lib/scan/run-scan";
@@ -27,6 +27,7 @@ export interface RunRetailScanResult {
   result: ScanResultBase | ScanResultPro;
   mock: boolean;
   fallbackReason: RetailScanFallbackReason;
+  scrapeError?: string;
 }
 
 function applyRetailQualityGuards(
@@ -86,7 +87,12 @@ export async function runRetailScan({
   if (!retailProduct) {
     console.warn("[retail-scan] could not scrape retail product, returning mock");
     const base = buildMockScanBase("RETAIL");
-    return { result: base, mock: true, fallbackReason: "retail_scrape_failed" };
+    return {
+      result: base,
+      mock: true,
+      fallbackReason: "retail_scrape_failed",
+      scrapeError: getLastRetailScrapeError() ?? undefined,
+    };
   }
 
   console.log(

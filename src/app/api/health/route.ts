@@ -22,6 +22,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { isDbReachable } from "@/lib/db/safe-query";
 import { isStripeEnabled, isEmailEnabled, isApifyEnabled, getRuntimeConfig } from "@/lib/runtime-config";
+import { validateApifyToken } from "@/lib/apify/client";
 import { isEmailSignInAvailable } from "@/auth/auth";
 import type { ServiceHealth } from "@/types";
 
@@ -43,7 +44,7 @@ export async function GET(): Promise<NextResponse> {
 
   health.stripe = isStripeEnabled() ? "live" : "mock";
   health.email = isEmailEnabled() ? "live" : "mock";
-  health.apify = isApifyEnabled() ? "live" : "mock";
+  health.apify = await validateApifyToken();
 
   const { auth } = getRuntimeConfig();
   const warnings: string[] = [];
@@ -57,6 +58,10 @@ export async function GET(): Promise<NextResponse> {
   }
   if (!isApifyEnabled()) {
     warnings.push("Apify is not configured — TikTok trending/search endpoints will serve mock data only.");
+  } else if (health.apify === "error") {
+    warnings.push(
+      "Apify token is set but rejected by the API — retail store scans and TikTok refresh will fall back to demo data. Update APIFY_API_TOKEN in Vercel."
+    );
   }
 
   return NextResponse.json(

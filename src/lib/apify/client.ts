@@ -26,6 +26,23 @@ export type ApifyRunResult<T> =
   | { ok: true; items: T[] }
   | { ok: false; error: string };
 
+/** Ping Apify with the configured token — presence alone is not enough. */
+export async function validateApifyToken(): Promise<"live" | "error" | "mock"> {
+  if (!isApifyEnabled()) return "mock";
+
+  const { apify } = getRuntimeConfig();
+  try {
+    const response = await fetch(
+      `${APIFY_BASE_URL}/users/me?token=${encodeURIComponent(apify.token as string)}`,
+      { signal: timeoutSignal(8_000) }
+    );
+    return response.ok ? "live" : "error";
+  } catch (err) {
+    console.error("[apify] token validation failed:", err);
+    return "error";
+  }
+}
+
 function timeoutSignal(ms: number): AbortSignal {
   const controller = new AbortController();
   setTimeout(() => controller.abort(), ms);

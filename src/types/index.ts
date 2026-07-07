@@ -116,6 +116,7 @@ export interface ApiOkShape<T> {
   mock: boolean;
   /** Set when a retail URL scan fell back to demo data (scrape or Amazon match failed). */
   mockReason?: "retail_scrape_failed" | "amazon_match_failed";
+  scrapeError?: string;
 }
 
 export type ApiResponse<T> = ApiOkShape<T> | ApiErrorShape;
