@@ -1,7 +1,7 @@
 # Profit Decision Engine — 인수인계 문서
 
 > **마지막 업데이트:** 2026-07-11 (홍보 단계 점검 + 랜딩/가격 UI 반영)  
-> **최신 커밋:** `c3da27a` (홍보 UI push + 프로덕션 배포 완료, smoke 6/6)  
+> **최신 커밋:** `6286ee6` (홍보 실행 가이드 + Stripe webhook live 확인)  
 > **목적:** 토큰 제한·계정 전환 시 다음 세션에서 바로 이어서 작업할 수 있도록 현재 상태를 기록합니다.  
 > **규칙:** 이 파일은 작업할 때마다 **항상** 최신 상태로 업데이트한다 (별도 명령 불필요).
 
@@ -50,10 +50,50 @@
 
 ### 홍보 전 체크리스트 (남은 항목)
 
-- [ ] Stripe Dashboard → Send test webhook → **200** 확인
+- [x] Webhook 엔드포인트 응답 확인 — invalid sig → **400** (엔드포인트 live)
+- [ ] Stripe Dashboard (Live) → Webhook `www.profit-decision-engine.com` → Send test event → **200**
 - [ ] Live mode $9.99 테스트 결제 → 대시보드 `tier: pro` 확인
 - [ ] YouTube 데모 1편 업로드 + 채널 설명란 링크
 - [ ] Apify 크레딧 리셋 (~2026-08) 후 retail 4-store 재테스트 → beta → launch 메시지 전환
+
+### Stripe Live E2E (5분, 직접 실행)
+
+1. https://www.profit-decision-engine.com/login — 본인 이메일로 magic link 로그인
+2. https://www.profit-decision-engine.com/pricing → **Upgrade to Pro**
+3. Stripe Checkout에서 **$9.99/mo** 확인 후 테스트 카드/실카드 결제
+4. 리다이렉트: `/dashboard?checkout=success` + Pro 배너 확인
+5. Stripe Dashboard → Webhooks → PDE endpoint → 최근 `checkout.session.completed` **200**
+6. (선택) Supabase `users` 테이블에서 본인 `tier = 'pro'` 확인
+
+### YouTube 데모 스크립트 (3–5분, 복붙용)
+
+**제목 예:** `I built a tool that says BUY or SKIP for any Amazon ASIN in 5 seconds`
+
+**흐름:**
+1. (0:00) 문제 — 스프레드시트·Keepa 탭 너무 많음
+2. (0:30) https://www.profit-decision-engine.com/#demo — ASIN 1개 스캔 → BUY/SKIP/RISK
+3. (1:30) 로그인 후 Pro — margin, FBA fees, ROI 화면
+4. (2:30) 가격 $9.99/mo, retail은 beta라고 **솔직히** 언급
+5. (3:00) CTA — 링크는 설명란
+
+**설명란 템플릿:**
+```
+Try free (no credit card): https://www.profit-decision-engine.com/#demo
+Pro — full margin & fees: https://www.profit-decision-engine.com/pricing ($9.99/mo)
+
+Profit Decision Engine gives Amazon sellers a clear BUY / SKIP / RISK verdict from a single ASIN.
+Retail store arbitrage scans are in beta.
+```
+
+### 커뮤니티 1차 포스트 (Reddit/FB, 영문)
+
+```
+I made a small SaaS for Amazon sourcing — paste an ASIN and get BUY/SKIP/RISK in a few seconds (free demo on the homepage, no login).
+
+Pro ($9.99/mo) adds full margin/FBA fee breakdown. Retail arbitrage is still beta.
+
+Would love feedback from real sellers: https://www.profit-decision-engine.com/#demo
+```
 
 ### 홍보용 URL
 
