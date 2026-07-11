@@ -1,17 +1,18 @@
 import { Eyebrow } from "@/app/components/ui";
 
 const FREE_FEATURES = [
-  "Unlimited verdicts (BUY/SKIP/RISK)",
-  "Price, rating & review count",
+  "ASIN verdicts (BUY / SKIP / RISK)",
+  "Live Amazon price, rating & reviews",
   "Category & listing snapshot",
+  "Magic-link sign-in — no password",
 ];
 
 const PRO_FEATURES = [
   "Everything in Free",
-  "Full margin, fee & ROI breakdown",
-  "Competition & buy-box analysis",
-  "Review-trend risk detection",
-  "Priority scan processing",
+  "Full margin, FBA fees & ROI breakdown",
+  "Competition & buy-box context",
+  "Risk flags when margin or match is unreliable",
+  "Retail store URL scan (beta, login required)",
 ];
 
 export default function PricingSection() {
@@ -138,10 +139,10 @@ export default function PricingSection() {
 
             <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 20 }}>
               <span className="font-display" style={{ fontSize: 40, fontWeight: 700 }}>
-                $29
+                $9.99
               </span>
               <span style={{ color: "var(--paper-dim)", fontSize: 14 }}>
-                / month, billed monthly or yearly
+                / month · cancel anytime
               </span>
             </div>
 
@@ -161,7 +162,7 @@ export default function PricingSection() {
             </ul>
 
             <a
-              href="/pricing"
+              href="/login"
               style={{
                 marginTop: "auto",
                 textAlign: "center",
@@ -174,7 +175,7 @@ export default function PricingSection() {
                 textDecoration: "none",
               }}
             >
-              Upgrade to Pro
+              Start free — upgrade in app
             </a>
           </div>
         </div>

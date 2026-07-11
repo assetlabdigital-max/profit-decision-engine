@@ -1,47 +1,89 @@
 # Profit Decision Engine — 인수인계 문서
 
-> **마지막 업데이트:** 2026-07-07 17:30 (Cursor 로컬, Agent 모드)  
-> **최신 커밋 (로컬, 미푸시):** Apify 없이 가능한 P0–P2 업그레이드 일괄 적용  
+> **마지막 업데이트:** 2026-07-11 (홍보 단계 점검 + 랜딩/가격 UI 반영)  
+> **최신 커밋:** `0e3865b` (프로덕션 배포 완료, Stripe $9.99 설정)  
 > **목적:** 토큰 제한·계정 전환 시 다음 세션에서 바로 이어서 작업할 수 있도록 현재 상태를 기록합니다.  
 > **규칙:** 이 파일은 작업할 때마다 **항상** 최신 상태로 업데이트한다 (별도 명령 불필요).
 
 ---
 
-## ⚠️ 세션 중단점 — 다음 계정이 여기서 시작
+## 📣 홍보 단계 (Promotion Stage) — 2026-07-11
 
-**이번 세션:** Apify 크레딧 없이 가능한 모든 코드 업그레이드 완료 + 유료 Apify 전환 준비도 기술 판정.
+**현재 단계: 소프트 런치 (Soft Launch)** — ASIN + Pro 결제는 공개 가능. Retail arbitrage는 **beta**로만 홍보.
+
+### 포지셔닝 (외부 메시지)
+
+| 메시지 | 사용 |
+|--------|------|
+| "Paste an ASIN → BUY / SKIP / RISK in seconds" | 메인 훅 (YouTube, 랜딩, 커뮤니티) |
+| "Full margin, FBA fees, ROI — Pro $9.99/mo" | 업그레이드 CTA |
+| "Retail store scan — beta, login required" | 과장 금지. Apify 한도/검증 완료 전 |
+| "No credit card to try · Cancel anytime" | 신뢰 문구 |
+
+### 인프라 준비도
 
 | 항목 | 상태 | 비고 |
 |------|------|------|
-| Apify 월간 한도 초과 | 🔴 프로덕션 차단 | `HTTP 403 usage hard limit` — 모든 retail Apify 시도 즉시 실패 |
+| 프로덕션 | ✅ | https://www.profit-decision-engine.com — smoke 6/6 |
+| 랜딩 페이지 | ✅ | Hero + Demo + Trust + Pricing + CTA (2026-07-11) |
+| 가격 표기 | ✅ | **$9.99/mo** — Stripe `price_1TpowQF2FudQXwWDHc4USVk5` |
+| Stripe checkout | ✅ | Vercel `STRIPE_PRICE_ID_PRO_MONTHLY` 설정 |
+| Stripe webhook | ✅ | PDE 1개만 유지 (www 도메인). Stock-Risk-Briefing 별도 |
+| ASIN 데모 (비로그인) | ✅ | 홈 `#demo` |
+| Retail beta | 🟡 | 로그인 필수, direct-scrape fallback, Apify 한도 차단 |
+| Live checkout E2E | ⏳ | 사용자 $9.99 테스트 결제 → `plan: pro` 확인 필요 |
+
+### 홍보 채널 (우선순위)
+
+| 채널 | 상태 | 다음 액션 |
+|------|------|-----------|
+| **YouTube** | 🟡 준비 | 3–5분 ASIN 데모 영상 (BUY/SKIP/RISK 1개씩) → 설명란에 링크 |
+| **셀러 커뮤니티** | ⏳ | Reddit r/FulfillmentByAmazon, Facebook 그룹 — **과장 없이** ASIN만 |
+| **1–2 베타 유저** | ⏳ | 지인/커뮤니티에서 무료 피드백 → Pro 전환 여부 관찰 |
+| **유료 광고** | ❌ 보류 | Retail 검증 + 3+ 유료 구독 전까지 비추 |
+
+### 손익 기준 (부트스트랩)
+
+- Cursor Pro ~$20/mo → **Pro 3명** ($9.99×3 ≈ $30)이면 도구비 회수
+- Apify Starter $29 추가 시 → **~6명** Pro로 커버
+- **투자 유치 불필요** — 이 단계에서는 유료 사용자 검증이 우선
+
+### 홍보 전 체크리스트 (남은 항목)
+
+- [ ] Stripe Dashboard → Send test webhook → **200** 확인
+- [ ] Live mode $9.99 테스트 결제 → 대시보드 `tier: pro` 확인
+- [ ] YouTube 데모 1편 업로드 + 채널 설명란 링크
+- [ ] Apify 크레딧 리셋 (~2026-08) 후 retail 4-store 재테스트 → beta → launch 메시지 전환
+
+### 홍보용 URL
+
+- 홈: https://www.profit-decision-engine.com
+- 데모: https://www.profit-decision-engine.com/#demo
+- 가격/업그레이드: https://www.profit-decision-engine.com/pricing
+- 로그인: https://www.profit-decision-engine.com/login
+
+---
+
+## ⚠️ 세션 중단점 — 다음 계정이 여기서 시작
+
+**이번 세션:** Stripe/webhook 정리 + 프로덕션 재배포 + **홍보 UI/문서 업데이트**.
+
+| 항목 | 상태 | 비고 |
+|------|------|------|
+| Apify 월간 한도 초과 | 🔴 프로덕션 차단 | `HTTP 403 usage hard limit` — retail Apify 즉시 실패 |
 | Retail 스캔 인증 게이트 | ✅ | `/api/scan` retail URL → 로그인 필수 (401) |
-| Retail 스캔 rate limit | ✅ | free 10/h, pro 50/h (`scan_history` 기준) |
-| Retail scrape 캐시 | ✅ | `migrations/004_retail_scrape_cache.sql` (24h TTL) — **DB migrate 필요** |
-| Direct scrape (9 stores) | ✅ | JSON-LD + OG/meta fallback, Apify 전 시도 |
-| Amazon 가격 | ✅ | SP-API pricing 우선, Apify는 `AMAZON_PRICE_VIA_APIFY=true`일 때만 |
-| 가격 sanity 검증 | ✅ | store vs Amazon 비율 이상 시 SKIP + warning |
-| **예외 상황 엔진** | ✅ | `edge-cases.ts` — 20+ 패턴 (pack/scent/volume/색상/리퍼/번들 등) |
-| Stripe 구독 lifecycle | ✅ | `subscription.updated` / `deleted` → tier 동기화 |
-| Checkout UX | ✅ | success/cancel 배너, UpgradeButton payload 수정 |
-| CI | ✅ | `.github/workflows/ci.yml` (typecheck + match-quality + build) |
+| Retail scrape 캐시 | ✅ | `004_retail_scrape_cache.sql` — **DB migrate 완료** |
+| Stripe Pro 가격 | ✅ | $9.99/mo, `price_1TpowQF2FudQXwWDHc4USVk5` |
+| Stripe webhook (PDE) | ✅ | 중복 삭제, `STRIPE_WEBHOOK_SECRET` 갱신 후 재배포 |
+| 랜딩/가격 UI | ✅ | $29→$9.99, 전체 섹션 조립, SEO metadata |
+| Live checkout E2E | ⏳ | 수동 테스트 대기 |
+| Retail 라이브 검증 | ⏳ | Apify 크레딧 리셋 후 |
 
-**유료 Apify 전환 판정: 아직 NO (기술적으로)**
-
-| 준비됨 | 미완 / 차단 |
-|--------|-------------|
-| 방어적 mock 아키텍처, variant mismatch, 9-store 코드 | 5/9 store 라이브 검증 미완 (CVS, Ulta, HD, BB, Walgreens) |
-| Auth + rate limit + cache로 비용 통제 기반 마련 | Target 가격 품질 이슈 ($35 vs 실제 $8–12) — sanity는 경고만 |
-| SP-API로 ASIN 스캔 Apify 의존 제거 | Apify 복구 후 Costco/Walgreens/CVS 재테스트 필요 |
-| Stripe checkout + webhook 확장 | Stripe checkout E2E 수동 테스트 미완 |
-
-**권장 순서 (Apify 크레딧 복구 또는 유료 전환 후):**
-1. `npm run db:migrate` — `004_retail_scrape_cache.sql` 적용
-2. Target / Costco / Walgreens URL 프로덕션 재테스트 (`mock: false` 확인)
-3. `npm run smoke -- https://www.profit-decision-engine.com` (6 checks)
-4. Stripe checkout E2E 수동 테스트
-5. **그때** Apify 유료 플랜 검토 (월 $5 free는 검증용으로만)
-
-**Apify 크레딧 없을 때 사용자 선택:** 다음 달 $5 크레딧 리셋 대기 OR 제품 검증 완료 후 유료 전환.
+**권장 순서 (지금):**
+1. 홍보 UI 커밋 + push + Vercel 재배포
+2. Stripe live $9.99 테스트 결제 1회
+3. YouTube ASIN 데모 영상
+4. Apify 복구 후 retail 재테스트 → 메시지 beta→launch 검토
 
 ---
 
@@ -95,7 +137,7 @@ npm run build          # ✅ 2026-07-07 성공
 npm run typecheck      # ✅
 npm run test:match-quality  # ✅ 4+ assertions
 npm run smoke          # ✅ 로컬 6/6 (retail auth gate 포함)
-npm run db:migrate     # ⏳ 004_retail_scrape_cache.sql 적용 필요
+npm run db:migrate     # ✅ 004_retail_scrape_cache 적용 완료 (2026-07-11)
 ```
 
 프로덕션 smoke (선택):
@@ -109,12 +151,11 @@ npm run smoke -- https://www.profit-decision-engine.com
 
 | 우선순위 | 작업 | 비고 |
 |----------|------|------|
-| **P0** | `npm run db:migrate` | `004_retail_scrape_cache.sql` 프로덕션 적용 |
-| **P0** | Apify 크레딧 복구 후 retail 재테스트 | Target, Costco, Walgreens, CVS |
-| P1 | 프로덕션 smoke | `npm run smoke -- https://www.profit-decision-engine.com` |
-| P2 | Stripe checkout E2E (수동) | 로그인 → pricing → checkout → webhook → Pro tier |
-| P3 | TikTok Apify refresh (수동) | 대시보드 버튼 → 캐시 적재 확인 |
-| P4 | Apify 유료 전환 | 위 P0–P2 통과 후에만 권장 |
+| **P0** | 홍보 UI push + 재배포 | 랜딩/가격 $9.99 (2026-07-11) |
+| **P0** | Stripe live checkout E2E | $9.99 → `tier: pro` 확인 |
+| P1 | YouTube ASIN 데모 1편 | 홍보 채널 1순위 |
+| P2 | Apify 크레딧 복구 후 retail 재테스트 | Target, Costco, Walgreens, CVS |
+| P3 | Apify 유료 전환 | retail 검증 + 유료 구독자 확보 후 |
 
 ---
 
