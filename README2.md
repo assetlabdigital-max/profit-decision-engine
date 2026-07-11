@@ -1,7 +1,7 @@
 # Profit Decision Engine — 인수인계 문서
 
 > **마지막 업데이트:** 2026-07-11 (홍보 단계 점검 + 랜딩/가격 UI 반영)  
-> **최신 커밋:** `0e3865b` (프로덕션 배포 완료, Stripe $9.99 설정)  
+> **최신 커밋:** `c3da27a` (홍보 UI push + 프로덕션 배포 완료, smoke 6/6)  
 > **목적:** 토큰 제한·계정 전환 시 다음 세션에서 바로 이어서 작업할 수 있도록 현재 상태를 기록합니다.  
 > **규칙:** 이 파일은 작업할 때마다 **항상** 최신 상태로 업데이트한다 (별도 명령 불필요).
 
@@ -80,7 +80,7 @@
 | Retail 라이브 검증 | ⏳ | Apify 크레딧 리셋 후 |
 
 **권장 순서 (지금):**
-1. 홍보 UI 커밋 + push + Vercel 재배포
+1. ~~홍보 UI 커밋 + push + Vercel 재배포~~ ✅ `c3da27a`
 2. Stripe live $9.99 테스트 결제 1회
 3. YouTube ASIN 데모 영상
 4. Apify 복구 후 retail 재테스트 → 메시지 beta→launch 검토
@@ -151,7 +151,7 @@ npm run smoke -- https://www.profit-decision-engine.com
 
 | 우선순위 | 작업 | 비고 |
 |----------|------|------|
-| **P0** | 홍보 UI push + 재배포 | 랜딩/가격 $9.99 (2026-07-11) |
+| **P0** | ~~홍보 UI push + 재배포~~ | ✅ `c3da27a` (2026-07-11) |
 | **P0** | Stripe live checkout E2E | $9.99 → `tier: pro` 확인 |
 | P1 | YouTube ASIN 데모 1편 | 홍보 채널 1순위 |
 | P2 | Apify 크레딧 복구 후 retail 재테스트 | Target, Costco, Walgreens, CVS |
