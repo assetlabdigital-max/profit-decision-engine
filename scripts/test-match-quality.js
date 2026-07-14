@@ -40,9 +40,9 @@ function tokenOverlapScore(a, b) {
 
 function extractPackCount(title) {
   const norm = normalizeText(title);
-  const explicit = norm.match(/(\d+)\s*pack\b/);
+  const explicit = norm.match(/(\d+)[\s-]*pack\b/);
   if (explicit) return Math.max(1, parseInt(explicit[1], 10));
-  if (/\b(twin|duo|double)\s+pack\b/.test(norm) || /\b2\s+pack\b/.test(norm)) return 2;
+  if (/\b(twin|duo|double)\s+pack\b/.test(norm) || /\b2[\s-]*pack\b/.test(norm)) return 2;
   return 1;
 }
 

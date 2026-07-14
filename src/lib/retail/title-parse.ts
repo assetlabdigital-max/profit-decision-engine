@@ -14,14 +14,14 @@ export function normalizeText(value: string): string {
 export function extractPackCount(title: string): number {
   const norm = normalizeText(title);
 
-  const explicit = norm.match(/(\d+)\s*pack\b/);
+  const explicit = norm.match(/(\d+)[\s-]*pack\b/);
   if (explicit) return Math.max(1, parseInt(explicit[1], 10));
 
-  if (/\b(twin|duo|double)\s+pack\b/.test(norm) || /\b2\s*pack\b/.test(norm)) return 2;
-  if (/\b3\s*pack\b/.test(norm) || /\btriple\s+pack\b/.test(norm)) return 3;
-  if (/\b4\s*pack\b/.test(norm)) return 4;
-  if (/\b6\s*pack\b/.test(norm)) return 6;
-  if (/\b12\s*pack\b/.test(norm)) return 12;
+  if (/\b(twin|duo|double)\s+pack\b/.test(norm) || /\b2[\s-]*pack\b/.test(norm)) return 2;
+  if (/\b3[\s-]*pack\b/.test(norm) || /\btriple\s+pack\b/.test(norm)) return 3;
+  if (/\b4[\s-]*pack\b/.test(norm)) return 4;
+  if (/\b6[\s-]*pack\b/.test(norm)) return 6;
+  if (/\b12[\s-]*pack\b/.test(norm)) return 12;
 
   if (/\bset\s+of\s+(\d+)\b/.test(norm)) {
     const m = norm.match(/\bset\s+of\s+(\d+)\b/);
