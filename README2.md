@@ -329,7 +329,25 @@ README2.md 보고 Stripe checkout E2E 가이드 써 줘
 
 ---
 
-## 10. 알려진 트레이드오프
+## 11. Supabase 보안 (RLS) — 2026-07-14
+
+**이메일 경고:** `rls_disabled_in_public`, `sensitive_columns_exposed` (프로젝트 **Smart Decision to Sell**, `bnfzabypahljrddhbadf`)
+
+**조치:** `migrations/005_enable_rls.sql` + `006_drop_public_users_policy.sql` 적용 완료
+- `public` 스키마 **모든 테이블**에 RLS + FORCE RLS 활성화
+- `anon`, `authenticated` 역할에서 `REVOKE ALL` — PostgREST API로 직접 읽기/쓰기 차단
+- **위험 정책 제거:** `users.allow webhook insert` (USING/WITH CHECK `true` → 전체 공개) 삭제
+- PDE 앱은 Vercel `DATABASE_URL`(postgres 서비스 역할)만 사용 → **RLS 우회, 정상 동작** (smoke 6/6 확인)
+
+**검증:**
+```bash
+npm run db:migrate
+node scripts/verify-rls.js
+```
+
+Supabase Dashboard → Security Advisor에서 이슈가 사라질 때까지 수 시간~24시간 걸릴 수 있음. `users` 등 민감 컬럼 테이블도 RLS=true 확인됨.
+
+---
 
 - `AUTH_SECRET` 미설정 → dev fallback (health warnings) — **프로덕션은 설정됨**
 - DB outage 중 webhook → 멱등성 불가, best-effort
