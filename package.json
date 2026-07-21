@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "db:migrate": "node scripts/migrate.js",
+    "supabase:unpause": "node scripts/unpause-supabase.js",
     "smoke": "node scripts/smoke-test.js",
     "typecheck": "tsc --noEmit",
     "test:match-quality": "node scripts/test-match-quality.js",
